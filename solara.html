@@ -1,60 +1,105 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Solara – Workspace</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<style>
-.drag-over { background-color: rgba(99,102,241,.1); outline: 2px dashed #6366f1; outline-offset: -2px; }
-.editable { outline: none; min-height: 1.5rem; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Solara – Workspace Board</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    .drag-over{ background-color: rgba(99,102,241,.1); outline: 2px dashed #6366f1; outline-offset: -2px; }
+    .editable{ outline: none; min-height: 1.5rem; }
+    .card{box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.06)}
+  </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-<header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-<div>
-<h1 class="text-3xl font-bold tracking-tight">Solara</h1>
-<p class="text-sm text-gray-500 dark:text-gray-400">Workspace Board</p>
-</div>
-<div>
-<button id="btnBack" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700">Workspaces</button>
-<button id="btnSignOut" class="ml-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700">Sign out</button>
-</div>
-</header>
+  <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
+      <p class="text-sm text-gray-500 dark:text-gray-400">Workspace Board</p>
+    </div>
+    <div>
+      <button id="btnBack" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700">Workspaces</button>
+      <button id="btnSignOut" class="ml-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700">Sign out</button>
+    </div>
+  </header>
 
-<nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
-<div class="flex items-center gap-6">
-<span class="text-indigo-600 font-semibold">Tasks</span>
-<button onclick="window.location.href='reports.html'+location.search" class="text-gray-700 dark:text-gray-200 hover:text-indigo-600">Reports</button>
-</div>
-<div class="flex items-center gap-3">
-<button onclick="clearAllTasks()" title="Clear all" class="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200">🗑</button>
-<button id="newTaskBtn" onclick="addNewTask()" class="px-4 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-500 shadow">+</button>
-</div>
-</nav>
+  <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
+    <div class="flex items-center gap-6">
+      <span class="text-indigo-600 font-semibold">Tasks</span>
+      <button id="btnReports" class="text-gray-700 dark:text-gray-200 hover:text-indigo-600">Reports</button>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="clearAllTasks()" title="Clear all" class="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200">🗑</button>
+      <button id="newTaskBtn" onclick="addNewTask()" class="px-4 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-500 shadow">+</button>
+    </div>
+  </nav>
 
-<main class="p-6 flex-1 overflow-y-auto">
-<div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-0 transition-opacity"></div>
-</main>
+  <main class="p-6 flex-1 overflow-y-auto">
+    <div id="tabBar" class="flex items-center gap-2 mb-4"></div>
+    <div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-0 transition-opacity"></div>
+  </main>
 
-<div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
-<div class="flex items-center justify-between px-6 py-3">
-<span id="saveHint" class="text-sm text-gray-500"></span>
-<button onclick="exportBoardAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600" title="Download Board">⬇️</button>
-</div>
-</div>
+  <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
+    <div class="flex items-center justify-between px-6 py-3">
+      <span id="saveHint" class="text-sm text-gray-500"></span>
+      <button onclick="exportBoardAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600" title="Download Board">⬇️</button>
+    </div>
+  </div>
 
-<script>
-const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev';
-function base(){ return API_BASE.replace(/\/+$/, ''); }
-const urlParams = new URLSearchParams(location.search);
-const WORKSPACE_ID = urlParams.get('ws');
+  <script>
+    // ========= CONFIG =========
+    const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev';
+    const base = () => API_BASE.replace(/\/+$/, '');
+    const urlParams = new URLSearchParams(location.search);
+    const WORKSPACE_ID = urlParams.get('ws');
+    if(!WORKSPACE_ID){ location.replace('workspace.html'); }
 
-if (!WORKSPACE_ID) { location.replace('workspace.html'); }
+    // ========= LOCAL KEYS =========
+    function userId(){ try{ return JSON.parse(localStorage.getItem('stytch_user')||'{}')?.user_id || null; }catch{return null} }
+    function storageKey(){ return `solara-tabs::${userId()||'anon'}::${WORKSPACE_ID}`; }
 
-function userId(){ try{ return JSON.parse(localStorage.getItem('stytch_user')||'{}')?.user_id || null; }catch{return null} }
-function key(){ return `solara-tabs::${userId()||'anon'}::${WORKSPACE_ID}`; }
+    // ========= API =========
+    async function api(path, opts={}){
+      const token = localStorage.getItem('stytch_session_jwt'); if(!token){ location.href='sign-in.html'; return; }
+      const res = await fetch(`${base()}${path}`, { ...opts, mode:'cors', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, ...(opts.headers||{}) } });
+      if(res.status===401){ location.href='sign-in.html'; return; }
+      if(!res.ok){ throw new Error(`API ${res.status}: ${await res.text()}`); }
+      return res;
+    }
 
-async function api(path, opts={}){
-</html>
+    // ========= STATE =========
+    let tabs = {}; // { [tabName]: { todo:[], inprogress:[], done:[] } }
+    let activeTab = null;
+
+    function saveLocal(){ localStorage.setItem(storageKey(), JSON.stringify(tabs)); }
+    function loadLocal(){ try{ return JSON.parse(localStorage.getItem(storageKey())||'{}'); }catch{return{}} }
+
+    async function loadFromCloud(){ const res=await api(`/tasks?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`); if(!res) return false; const data=await res.json(); tabs = data.tabs || {}; return true; }
+
+    function ensureDefaults(){ if(Object.keys(tabs).length===0){ tabs['Main']={ todo:[], inprogress:[], done:[] }; } if(!activeTab || !tabs[activeTab]) activeTab=Object.keys(tabs)[0]; }
+
+    // ========= UI: Tabs =========
+    function renderTabBar(){ const bar=document.getElementById('tabBar'); bar.innerHTML=''; const names=Object.keys(tabs); names.forEach(name=>{ const b=document.createElement('button'); b.className=`px-3 py-1.5 rounded-full text-sm border ${name===activeTab?'border-indigo-500 bg-indigo-50 text-indigo-700':'border-gray-300 text-gray-700 hover:border-indigo-500'}`; b.textContent=name; b.onclick=()=>{ activeTab=name; renderBoard(); }; b.ondblclick=()=>{ const newName=prompt('Rename tab', name); if(!newName || tabs[newName]) return; tabs[newName]=tabs[name]; delete tabs[name]; if(activeTab===name) activeTab=newName; renderTabBar(); renderBoard(); persist(); }; b.oncontextmenu=(e)=>{ e.preventDefault(); if(Object.keys(tabs).length<=1) return; if(!confirm(`Delete tab "${name}"?`)) return; delete tabs[name]; if(activeTab===name) activeTab=Object.keys(tabs)[0]||null; renderTabBar(); renderBoard(); persist(); }; bar.appendChild(b); }); const plus=document.createElement('button'); plus.className='ml-2 px-3 py-1.5 rounded-full text-sm border border-green-300 text-green-700 hover:bg-green-50'; plus.textContent='＋ Tab'; plus.onclick=()=>{ const name=prompt('New tab name'); if(!name || tabs[name]) return; tabs[name]={ todo:[], inprogress:[], done:[] }; activeTab=name; renderTabBar(); renderBoard(); persist(); }; bar.appendChild(plus); }
+
+    // ========= UI: Board =========
+    function laneEl(title){ const wrap=document.createElement('div'); wrap.className='bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm'; wrap.dataset.col=title; wrap.innerHTML=`<h2 class="text-lg font-semibold mb-2">${title}</h2>`; return wrap; }
+    function createTaskElement(tabName, lane, t){ const id=t.id||(t.id=`task-${Date.now()}-${Math.random().toString(16).slice(2)}`); const el=document.createElement('div'); el.className='relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2 card'; el.draggable=true; el.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/plain', JSON.stringify({tab:tabName,lane,id})); }); const edit=document.createElement('div'); edit.className='editable w-full font-medium mb-1'; edit.contentEditable=true; edit.innerText=t.content||''; const date=document.createElement('input'); date.type='date'; date.value=t.dueDate||''; date.className='mt-1 text-xs bg-transparent text-gray-600 dark:text-gray-300'; const sel=document.createElement('select'); sel.className='mt-1 ml-2 text-xs bg-transparent border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(p=>{ const o=document.createElement('option'); o.value=p; o.text=p; if((t.priority||'Medium')===p) o.selected=true; sel.appendChild(o); }); const del=document.createElement('button'); del.className='absolute top-2 right-2 text-gray-400 hover:text-red-500'; del.innerHTML='✕'; del.onclick=()=>{ if(confirm('Delete this task?')){ const list=tabs[tabName][lane]; const idx=list.findIndex(x=>x.id===id); if(idx>-1){ list.splice(idx,1); renderBoard(); persist(); } } };
+      edit.addEventListener('input',()=>{ t.content=edit.innerText.trim(); persistDebounced(); });
+      date.addEventListener('change',()=>{ t.dueDate=date.value||''; persistDebounced(); });
+      sel.addEventListener('change',()=>{ t.priority=sel.value||'Medium'; persistDebounced(); });
+      const row=document.createElement('div'); row.className='flex items-center gap-2'; row.appendChild(date); row.appendChild(sel);
+      el.appendChild(edit); el.appendChild(row); el.appendChild(del);
+      return el; }
+
+    function renderBoard(){ ensureDefaults(); const board=document.getElementById('board'); board.innerHTML=''; const names=['To Do','In Progress','Done']; const keys=['todo','inprogress','done']; const lanes=names.map(n=>laneEl(n)); board.append(...lanes); const data=tabs[activeTab]; keys.forEach((k,i)=>{ const laneElRef=lanes[i]; (data[k]||[]).forEach(task=> laneElRef.appendChild(createTaskElement(activeTab,k,task)) ); laneElRef.ondragover=(e)=>{ e.preventDefault(); laneElRef.classList.add('drag-over'); }; laneElRef.ondragleave=()=> laneElRef.classList.remove('drag-over'); laneElRef.ondrop=(e)=>{ e.preventDefault(); laneElRef.classList.remove('drag-over'); try{ const payload=JSON.parse(e.dataTransfer.getData('text/plain')); const {tab,lane,id}=payload||{}; const src=tabs[tab][lane]; const idx=src.findIndex(x=>x.id===id); if(idx>-1){ const [moved]=src.splice(idx,1); tabs[activeTab][keys[i]].push(moved); renderBoard(); persist(); } }catch{} };
+    });
+      document.getElementById('board').style.opacity='1';
+    }
+
+    // ========= Actions =========
+    const persistDebounced = debounce(persist, 400);
+    function debounce(fn, ms=400){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+    async function persist(){ saveLocal(); document.getElementById('saveHint').textContent='Saving…'; try{ await api('/tasks',{ method:'POST', body: JSON.stringify({ workspace_id: WORKSPACE_ID, tabs }) }); document.getElementById('saveHint').textContent='All changes saved'; } catch(e){ document.getElementById('saveHint').textContent='Offline — changes saved locally'; }
+    }
+    function addNewTask(){ ensureDefaults(); tabs[activeTab].todo.push({ id:`task-${Date.now()}`, content:'', dueDate:'', priority:'Medium' }); renderBoard(); persist(); }
