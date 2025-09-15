@@ -3,12 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Solara – Adaptive Workspace</title>
+  <title>Solara – Workspace Board</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
-    .fade-in { animation: fadeIn .25s ease-in-out; }
-    @keyframes fadeIn { from { opacity:.0; } to { opacity:1; } }
     .drag-over { background-color: rgba(99,102,241,.1); outline: 2px dashed #6366f1; outline-offset: -2px; }
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
     .editable { outline: none; min-height: 1.5rem; }
@@ -27,9 +25,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
       </button>
       <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl menu-card bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div class="px-4 py-3 text-sm">
-          <div id="userEmail" class="text-gray-600 dark:text-gray-300"></div>
-        </div>
+        <div class="px-4 py-3 text-sm"><div id="userEmail" class="text-gray-600 dark:text-gray-300"></div></div>
         <div class="border-t border-gray-100 dark:border-gray-700"></div>
         <button id="addUserBtn" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">Add user…</button>
         <button id="signOutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</button>
@@ -58,15 +54,9 @@
 
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div id="todo" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
-        <h2 class="text-lg font-semibold mb-2">To Do</h2>
-      </div>
-      <div id="inprogress" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress">
-        <h2 class="text-lg font-semibold mb-2">In Progress</h2>
-      </div>
-      <div id="done" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done">
-        <h2 class="text-lg font-semibold mb-2">Done</h2>
-      </div>
+      <div id="todo" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo"><h2 class="text-lg font-semibold mb-2">To Do</h2></div>
+      <div id="inprogress" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress"><h2 class="text-lg font-semibold mb-2">In Progress</h2></div>
+      <div id="done" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done"><h2 class="text-lg font-semibold mb-2">Done</h2></div>
     </div>
   </main>
 
@@ -87,97 +77,50 @@
 
   <script>
     const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev';
-    const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+    function getCookie(name){ const m=document.cookie.match(new RegExp('(?:^|; )'+name+'=([^;]+)')); return m ? decodeURIComponent(m[1]) : null; }
+    function getSessionJWT(){ return localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt') || getCookie('stytch_session_jwt') || null; }
 
-    // State
-    let activeTab = null;
-    let sessionJWT = null;
-    let authedUser = null; // Stytch-ish user shape
-    let wsid = new URLSearchParams(location.search).get('ws') || null;
+    let activeTab=null; let tabsShape={};
+    const wsid=new URLSearchParams(location.search).get('ws');
+    if(!wsid){ location.replace('workspace.html'); }
 
-    // Namespaced local cache to stop cross-user leakage
-    const keyTabs = () => `solara:tabs:${(authedUser?.id||authedUser?.user_id||'anon')}:${wsid||'no-ws'}`;
+    function keyTabs(){ const uid=(JSON.parse(localStorage.getItem('stytch_user')||'{}')?.id)||'anon'; return `solara:tabs:${uid}:${wsid}`; }
 
-    const debounce = (fn, ms = 500) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
+    async function verifyAuth(){ const token=getSessionJWT(); if(!token){ location.href='sign-in.html'; return false; } const res=await fetch(`${API_BASE}/auth/check`,{headers:{Authorization:`Bearer ${token}`}}); if(res.status===401){ location.href='sign-in.html'; return false; } return true; }
 
-    function initialsFor(user){ const email = user?.email_addresses?.[0]?.email_address || user?.email || '?'; const name = [user?.name?.first_name, user?.name?.last_name].filter(Boolean).join(' '); const fromName = name.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join(''); return (fromName||email.slice(0,2)).toUpperCase(); }
-    function displayNameFor(user){ const parts = [user?.name?.first_name, user?.name?.last_name].filter(Boolean); if (parts.length) return parts.join(' '); return user?.email_addresses?.[0]?.email_address || user?.email || 'User'; }
+    async function fetchCloud(){ const token=getSessionJWT(); const res=await fetch(`${API_BASE}/tasks?workspace_id=${encodeURIComponent(wsid)}`,{headers:{Authorization:`Bearer ${token}`}}); if(!res.ok) return {}; const data=await res.json(); return data.tabs||{}; }
+    async function saveCloud(){ const token=getSessionJWT(); await fetch(`${API_BASE}/tasks`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: JSON.stringify({ workspace_id: wsid, tabs: tabsShape }) }); }
 
-    function saveTabsToStorage(data){ try{ localStorage.setItem(keyTabs(), JSON.stringify(data)); }catch{} }
-    function loadTabsFromStorage(){ try{ return JSON.parse(localStorage.getItem(keyTabs())||'{}'); }catch{ return {}; } }
+    function saveLocal(){ try{ localStorage.setItem(keyTabs(), JSON.stringify(tabsShape)); }catch{} }
+    function loadLocal(){ try{ return JSON.parse(localStorage.getItem(keyTabs())||'{}'); }catch{ return {}; } }
 
-    function updateAuthUI(){ const avatar=document.getElementById('avatar'); const nameEl=document.getElementById('userName'); const emailEl=document.getElementById('userEmail'); const u = authedUser || {}; avatar.textContent = initialsFor(u); nameEl.textContent = displayNameFor(u); emailEl.textContent = u?.email_addresses?.[0]?.email_address || u?.email || ''; }
+    function initialsFor(u){ const e=u?.email_addresses?.[0]?.email_address||u?.email||'?'; const n=[u?.name?.first_name,u?.name?.last_name].filter(Boolean).join(' '); const from=n.split(/\s+/).slice(0,2).map(s=>s[0]).join(''); return (from||e.slice(0,2)).toUpperCase(); }
+    function displayNameFor(u){ const p=[u?.name?.first_name,u?.name?.last_name].filter(Boolean); if(p.length) return p.join(' '); return u?.email_addresses?.[0]?.email_address || u?.email || 'User'; }
 
-    function requireReauth(){ try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{} location.replace('/sign-in.html'); }
+    function updateAuthUI(){ const u=JSON.parse(localStorage.getItem('stytch_user')||'null')||{}; document.getElementById('avatar').textContent=initialsFor(u); document.getElementById('userName').textContent=displayNameFor(u); document.getElementById('userEmail').textContent=u?.email_addresses?.[0]?.email_address || u?.email || ''; }
 
-    async function verifySessionAndHydrate(){ sessionJWT = localStorage.getItem('stytch_session_jwt'); authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null'); if(!sessionJWT) return false; updateAuthUI(); try{ const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } }); if(!res.ok) return false; const data = await res.json(); if (!authedUser){ authedUser = { id: data.user_id, email_addresses:[{ email_address: data.email }], name: { first_name: (data.name||'').split(' ')[0]||'', last_name: (data.name||'').split(' ').slice(1).join(' ')||'' } }; localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }
-      // Ensure ws param exists
-      if (!wsid){ // If none, go pick one
-        location.replace('workspace.html');
-        return false;
-      }
-      updateAuthUI();
-      return true;
-    }catch{ return !!authedUser; }
-    }
+    function renderTabs(){ const c=document.getElementById('tabs'); c.innerHTML=''; Object.keys(tabsShape).forEach(name=>{ const b=document.createElement('button'); b.className='tab-button px-4 py-1.5 rounded-full text-sm font-medium bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-white transition-all duration-150 truncate max-w-[160px]'; if(name===activeTab){ b.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } b.dataset.tab=name; b.textContent=name; b.onclick=()=>switchTab(name); b.ondblclick=()=>{ const newName=prompt('Rename tab:', name); if(!newName||!newName.trim()||tabsShape[newName]) return; tabsShape[newName]=tabsShape[name]; delete tabsShape[name]; activeTab=newName; saveLocal(); renderTabs(); renderBoard(); saveCloud(); }; b.oncontextmenu=(e)=>{ e.preventDefault(); deleteTab(name); }; c.appendChild(b); }); }
 
-    async function loadTabsFromCloud(){ if(!sessionJWT || !wsid) return null; const res = await fetch(apiUrl(`tasks?workspace_id=${encodeURIComponent(wsid)}`), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } }); if(!res.ok){ if (res.status===401) requireReauth(); return null; } const data = await res.json(); return data.tabs || {}; }
-
-    const saveTabsToCloud = debounce(async (tabsShape)=>{ if(!sessionJWT || !wsid) return; await fetch(apiUrl('tasks'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ workspace_id: wsid, tabs: tabsShape }) }); }, 400);
-
-    // UI: Tabs + Board (similar to your previous build but storage is namespaced)
-    let tabsShape = {};
-
-    function renderTabs(){ const tabs = Object.keys(tabsShape); const container=document.getElementById('tabs'); container.innerHTML=''; tabs.forEach(name=>{ const b=document.createElement('button'); b.className='tab-button px-4 py-1.5 rounded-full text-sm font-medium bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-white transition-all duration-150 truncate max-w-[160px]'; if(name===activeTab){ b.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } b.dataset.tab=name; b.textContent=name; b.onclick=()=>switchTab(name); b.ondblclick=()=>{ const newName=prompt('Rename tab:', name); if(!newName||!newName.trim()||tabsShape[newName]) return; tabsShape[newName]=tabsShape[name]; delete tabsShape[name]; activeTab=newName; saveTabsToStorage(tabsShape); renderTabs(); renderBoard(); saveTabsToCloud(tabsShape); }; b.oncontextmenu=(e)=>{ e.preventDefault(); deleteTab(name); }; container.appendChild(b); }); }
-
-    function promptNewTab(){ const name=prompt('Enter tab name:'); if(!name||!name.trim()||tabsShape[name]) return; tabsShape[name]={ todo:[], inprogress:[], done:[] }; saveTabsToStorage(tabsShape); renderTabs(); switchTab(name); saveTabsToCloud(tabsShape); }
-    function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabsShape[name]; if(activeTab===name) activeTab=Object.keys(tabsShape)[0]||null; saveTabsToStorage(tabsShape); renderTabs(); renderBoard(); saveTabsToCloud(tabsShape); }
-
+    function promptNewTab(){ const name=prompt('Enter tab name:'); if(!name||!name.trim()||tabsShape[name]) return; tabsShape[name]={ todo:[], inprogress:[], done:[] }; saveLocal(); renderTabs(); switchTab(name); saveCloud(); }
+    function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabsShape[name]; if(activeTab===name) activeTab=Object.keys(tabsShape)[0]||null; saveLocal(); renderTabs(); renderBoard(); saveCloud(); }
     function switchTab(name){ if(!tabsShape[name]) return; activeTab=name; document.querySelectorAll('.tab-button').forEach(btn=>btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30')); const btn=[...document.querySelectorAll('.tab-button')].find(b=>b.dataset.tab===name); if(btn) btn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); renderBoard(); }
-
     function ensureAtLeastOneTask(){ const c=tabsShape[activeTab]; if(!c) return; if((c.todo?.length||0)+(c.inprogress?.length||0)+(c.done?.length||0)===0){ const id=`task-${Date.now()}`; c.todo.push({ id, content:'', dueDate:'', priority:'Medium' }); } }
 
-    function renderBoard(){ const cols=['todo','inprogress','done']; cols.forEach(col=>{ const el=document.getElementById(col); el.querySelectorAll('[data-task]')?.forEach(n=>n.remove()); el.ondragover=e=>{e.preventDefault(); el.classList.add('drag-over');}; el.ondragleave=()=>el.classList.remove('drag-over'); el.ondrop=e=>{ e.preventDefault(); el.classList.remove('drag-over'); const taskId=e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId,col); };
-    });
-      if(!activeTab || !tabsShape[activeTab]) return; ensureAtLeastOneTask(); const data=tabsShape[activeTab]; ['todo','inprogress','done'].forEach(col=>{ const el=document.getElementById(col); (data[col]||[]).forEach(t=>{ el.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); }); });
-    }
+    function renderBoard(){ const cols=['todo','inprogress','done']; cols.forEach(col=>{ const el=document.getElementById(col); el.querySelectorAll('[data-task]')?.forEach(n=>n.remove()); el.ondragover=e=>{e.preventDefault(); el.classList.add('drag-over');}; el.ondragleave=()=>el.classList.remove('drag-over'); el.ondrop=e=>{ e.preventDefault(); el.classList.remove('drag-over'); const taskId=e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId,col); }; }); if(!activeTab || !tabsShape[activeTab]) return; ensureAtLeastOneTask(); const data=tabsShape[activeTab]; ['todo','inprogress','done'].forEach(col=>{ const el=document.getElementById(col); (data[col]||[]).forEach(t=>{ el.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); }); }); }
 
-    function createTaskElement(id, content='', dueDate='', priority='Medium', column){ const w=document.createElement('div'); w.id=id; w.setAttribute('data-task','1'); w.draggable=true; w.className='relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2'; w.setAttribute('data-column', column);
-      const editable=document.createElement('div'); editable.className='editable w-full font-medium mb-1'; editable.contentEditable=true; editable.innerText=content; const placeholder=document.createElement('span'); placeholder.className='absolute left-3 top-3 text-sm text-gray-400 pointer-events-none'; placeholder.textContent='Click to edit...'; const row=document.createElement('div'); row.className='flex items-center gap-2'; const dateInput=document.createElement('input'); dateInput.type='date'; dateInput.value=dueDate||''; dateInput.className='mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300'; const prioritySelect=document.createElement('select'); prioritySelect.className='mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); }); const deleteBtn=document.createElement('button'); deleteBtn.className='absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title='Delete Task'; deleteBtn.onclick=()=>{ if(confirm('Delete this task?')) removeTaskById(id); };
-      function togglePlaceholder(){ placeholder.style.display = editable.innerText.trim()==='' ? 'block' : 'none'; }
-      editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); });
-      editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() }));
-      dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: dateInput.value || '' }));
-      prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' }));
-      w.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', id); });
-      row.appendChild(dateInput); row.appendChild(prioritySelect); w.appendChild(editable); w.appendChild(placeholder); w.appendChild(row); w.appendChild(deleteBtn); togglePlaceholder(); return w; }
+    function createTaskElement(id, content='', dueDate='', priority='Medium', column){ const w=document.createElement('div'); w.id=id; w.setAttribute('data-task','1'); w.draggable=true; w.className='relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2'; w.setAttribute('data-column', column); const editable=document.createElement('div'); editable.className='editable w-full font-medium mb-1'; editable.contentEditable=true; editable.innerText=content; const placeholder=document.createElement('span'); placeholder.className='absolute left-3 top-3 text-sm text-gray-400 pointer-events-none'; placeholder.textContent='Click to edit...'; const row=document.createElement('div'); row.className='flex items-center gap-2'; const dateInput=document.createElement('input'); dateInput.type='date'; dateInput.value=dueDate||''; dateInput.className='mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300'; const prioritySelect=document.createElement('select'); prioritySelect.className='mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); }); const deleteBtn=document.createElement('button'); deleteBtn.className='absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title='Delete Task'; deleteBtn.onclick=()=>{ if(confirm('Delete this task?')) removeTaskById(id); }; function togglePlaceholder(){ placeholder.style.display = editable.innerText.trim()==='' ? 'block' : 'none'; } editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); }); editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() })); dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: dateInput.value || '' })); prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' })); w.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', id); }); row.appendChild(dateInput); row.appendChild(prioritySelect); w.appendChild(editable); w.appendChild(placeholder); w.appendChild(row); w.appendChild(deleteBtn); togglePlaceholder(); return w; }
 
-    function persistTaskEdits(taskId, patch){ if(!activeTab || !tabsShape[activeTab]) return; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } } saveTabsToStorage(tabsShape); saveTabsToCloud(tabsShape); }
-    function removeTaskById(taskId){ if(!activeTab || !tabsShape[activeTab]) return; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } } saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); }
-    function moveTaskToColumn(taskId, target){ if(!activeTab || !tabsShape[activeTab]) return; let found=null; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ found=list.splice(idx,1)[0]; break; } } if(found){ tabsShape[activeTab][target]=tabsShape[activeTab][target]||[]; tabsShape[activeTab][target].push(found); saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); } }
-    function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabsShape[activeTab] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); }
-    function addNewTask(){ if(!activeTab){ const def='Click to edit'; tabsShape[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); } const id=`task-${Date.now()}`; const t={ id, content:'', dueDate:'', priority:'Medium' }; tabsShape[activeTab].todo.push(t); saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); }
+    function persistTaskEdits(taskId, patch){ if(!activeTab || !tabsShape[activeTab]) return; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } } saveLocal(); saveCloud(); }
+    function removeTaskById(taskId){ if(!activeTab || !tabsShape[activeTab]) return; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } } saveLocal(); renderBoard(); saveCloud(); }
+    function moveTaskToColumn(taskId, target){ if(!activeTab || !tabsShape[activeTab]) return; let found=null; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ found=list.splice(idx,1)[0]; break; } } if(found){ tabsShape[activeTab][target]=tabsShape[activeTab][target]||[]; tabsShape[activeTab][target].push(found); saveLocal(); renderBoard(); saveCloud(); } }
+    function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabsShape[activeTab] = { todo:[], inprogress:[], done:[] }; saveLocal(); renderBoard(); saveCloud(); }
+    function addNewTask(){ if(!activeTab){ const def='Click to edit'; tabsShape[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); } const id=`task-${Date.now()}`; const t={ id, content:'', dueDate:'', priority:'Medium' }; tabsShape[activeTab].todo.push(t); saveLocal(); renderBoard(); saveCloud(); }
 
     function exportBoardAsPDF(){ const board=document.getElementById('board'); html2pdf().set({ margin:.5, filename:'Solara-Board.pdf', image:{type:'jpeg',quality:.98}, html2canvas:{scale:2}, jsPDF:{unit:'in', format:'letter', orientation:'landscape'} }).from(board).save(); }
 
-    // User menu
-    function wireAuthButtons(){ document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden'); document.addEventListener('click', (e)=>{ const m=document.getElementById('userMenu'); const b=document.getElementById('userButton'); if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden'); }); document.getElementById('signOutBtn').onclick=()=>{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); location.replace('sign-in.html'); }; document.getElementById('addUserBtn').onclick=async()=>{ const email=prompt('Invite a user by email:'); if(!email) return; await fetch(apiUrl('shares'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ workspace_id: wsid, email }) }); alert('If the email is valid, an invite was queued.'); } }
+    function wireAuthButtons(){ document.getElementById('userButton').onclick=()=>document.getElementById('userMenu').classList.toggle('hidden'); document.addEventListener('click',(e)=>{ const m=document.getElementById('userMenu'); const b=document.getElementById('userButton'); if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden'); }); document.getElementById('signOutBtn').onclick=()=>{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); document.cookie='solara_session_jwt=; Path=/; Max-Age=0'; location.replace('sign-in.html'); }; document.getElementById('addUserBtn').onclick=async()=>{ const email=prompt('Invite a user by email:'); if(!email) return; const token=getSessionJWT(); await fetch(`${API_BASE}/shares`,{ method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: JSON.stringify({ workspace_id: wsid, email }) }); alert('If the email is valid, an invite was queued.'); } }
 
-    // Boot
-    document.addEventListener('DOMContentLoaded', async ()=>{
-      const ok = await verifySessionAndHydrate(); if(!ok) return;
-      // Load from cloud first to avoid stale previous-user leakage
-      let cloudTabs = await loadTabsFromCloud();
-      if (!cloudTabs || Object.keys(cloudTabs).length===0) {
-        // fall back to local cache (namespaced)
-        cloudTabs = loadTabsFromStorage();
-      }
-      tabsShape = cloudTabs && Object.keys(cloudTabs).length ? cloudTabs : { 'Click to edit': { todo:[], inprogress:[], done:[] } };
-      activeTab = Object.keys(tabsShape)[0];
-      renderTabs();
-      switchTab(activeTab);
-      wireAuthButtons();
-    });
+    (async function boot(){ const ok=await verifyAuth(); if(!ok) return; updateAuthUI(); wireAuthButtons(); let cloud=await fetchCloud(); if(!cloud || !Object.keys(cloud).length){ cloud=loadLocal(); } tabsShape = Object.keys(cloud).length ? cloud : { 'Click to edit': { todo:[], inprogress:[], done:[] } }; activeTab=Object.keys(tabsShape)[0]; renderTabs(); switchTab(activeTab); })();
   </script>
 </body>
 </html>
