@@ -11,43 +11,41 @@
     <div class="w-full max-w-md text-center">
       <h2 class="mt-6 text-2xl font-bold">Finishing up…</h2>
       <p id="status" class="mt-2 text-sm text-gray-600 dark:text-gray-300">Validating your sign-in…</p>
-      <a id="manualLink" href="solara.html" class="mt-6 inline-block px-5 py-3 rounded-xl bg-indigo-600 text-white">Continue to Solara</a>
+      <a id="manualLink" href="workspace.html" class="mt-6 inline-block px-5 py-3 rounded-xl bg-indigo-600 text-white">Continue</a>
       <pre id="debug" class="mt-4 text-left text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words"></pre>
     </div>
   </main>
+  <script type="module">
+    import { StytchHeadlessClient } from 'https://esm.sh/@stytch/vanilla-js/headless';
+    const STYTCH_PUBLIC_TOKEN = 'public-token-test-41b83ad2-8bb8-4787-8f9d-8005d9545bc8';
+    const stytch = new StytchHeadlessClient(STYTCH_PUBLIC_TOKEN);
 
-<script type="module">
-  import { StytchHeadlessClient } from 'https://esm.sh/@stytch/vanilla-js/headless';
-  const STYTCH_PUBLIC_TOKEN = 'public-token-test-41b83ad2-8bb8-4787-8f9d-8005d9545bc8';
-  const stytch = new StytchHeadlessClient(STYTCH_PUBLIC_TOKEN);
+    const params = new URLSearchParams(location.search);
+    const statusEl = document.getElementById('status');
+    const debugEl = document.getElementById('debug');
 
-  const params = new URLSearchParams(location.search);
-  const statusEl = document.getElementById('status');
-  const debugEl = document.getElementById('debug');
-  const next = sessionStorage.getItem('solara_next') || 'solara.html';
-
-  async function finalizeAuth(){
-    const token = params.get('token');
-    const tokenType = params.get('stytch_token_type');
-    if (!token) return;
-
-    try {
-      let authRes;
-      if (tokenType && tokenType.startsWith('magic_links')) {
-        authRes = await stytch.magicLinks.authenticate(token, { session_duration_minutes: 60 });
-      } else {
-        authRes = await stytch.oauth.authenticate(token, { session_duration_minutes: 60 });
+    async function finalizeAuth(){
+      const token = params.get('token');
+      const tokenType = params.get('stytch_token_type');
+      if (!token) return;
+      try {
+        let authRes;
+        if (tokenType && tokenType.startsWith('magic_links')) {
+          authRes = await stytch.magicLinks.authenticate(token, { session_duration_minutes: 60 });
+        } else {
+          authRes = await stytch.oauth.authenticate(token, { session_duration_minutes: 60 });
+        }
+        localStorage.setItem('stytch_session_jwt', authRes.session_jwt);
+        localStorage.setItem('stytch_user', JSON.stringify(authRes.user||null));
+        // Also set a cookie for Worker use if needed
+        document.cookie = `stytch_session_jwt=${encodeURIComponent(authRes.session_jwt)}; Path=/; Max-Age=${60*60}; SameSite=Lax`;
+        location.replace('workspace.html');
+      } catch (err) {
+        statusEl.textContent = 'Authentication failed.';
+        debugEl.textContent = JSON.stringify(err, null, 2);
       }
-      localStorage.setItem('stytch_session_jwt', authRes.session_jwt);
-      localStorage.setItem('stytch_user', JSON.stringify(authRes.user));
-      location.replace(next);
-    } catch (err) {
-      statusEl.textContent = 'Authentication failed.';
-      debugEl.textContent = JSON.stringify(err, null, 2);
     }
-  }
-
-  finalizeAuth();
-</script>
+    finalizeAuth();
+  </script>
 </body>
 </html>
