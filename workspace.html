@@ -1,0 +1,260 @@
+<!-- ===========================
+     workspace-hub.html (Solara)
+     Post‑sign‑in workspace switcher & creator
+     Stack: TailwindCSS (CDN) + fetch() to Cloudflare Worker API
+     =========================== -->
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solara — Your Workspaces</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{ --accent:#6366f1; --accent-ink:#4f46e5; --ring:rgba(99,102,241,.25);} 
+    html,body{height:100%}
+    body{font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Inter", "Noto Sans", sans-serif}
+    .lift{transition:transform .15s ease, box-shadow .15s ease}
+    .lift:hover{transform:translateY(-1px)}
+    .skeleton{background:linear-gradient(90deg,rgba(0,0,0,.06),rgba(0,0,0,.12),rgba(0,0,0,.06));background-size:200% 100%;animation:shimmer 1.2s infinite}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+  <!-- Header -->
+  <header class="sticky top-0 z-30 backdrop-blur bg-white/70 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-[color:var(--accent)]/10 flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-[color:var(--accent)]"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4zm0 2.3L7 7.5v8.9l5 2.8 5-2.8V7.5l-5-2.2z"/></svg>
+      </div>
+      <div class="flex-1">
+        <h1 class="text-xl font-semibold leading-tight">Your Workspaces</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Pick an existing workspace or create a new one.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnNew" class="lift inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[color:var(--accent)] text-white text-sm font-medium shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          New workspace
+        </button>
+        <button id="btnSignOut" class="lift inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+    <div id="alert" class="hidden mb-4 p-3 rounded-xl text-sm"></div>
+
+    <div class="mb-5 flex flex-col sm:flex-row gap-3 items-center">
+      <div class="flex-1 w-full">
+        <label class="sr-only" for="q">Search</label>
+        <input id="q" type="search" placeholder="Search by name…" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950" />
+      </div>
+      <div>
+        <select id="sort" class="px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+          <option value="recent">Sort: Recently used</option>
+          <option value="az">Sort: A → Z</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+    <div id="empty" class="hidden text-center py-20">
+      <div class="mx-auto w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-6 h-6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 8.6 23a1.65 1.65 0 0 0-1.82-.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 4 14a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.82-.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 1 8.6 1.65 1.65 0 0 0 1.6 7a1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 4.6 5 1.65 1.65 0 0 0 5 4a1.65 1.65 0 0 0 .6-1.82l-.06-.06A2 2 0 1 1 8.37-.71l.06.06c.43.43 1.05.59 1.62.39"/></svg>
+      </div>
+      <h3 class="text-lg font-semibold mb-1">No workspaces yet</h3>
+      <p class="text-sm text-gray-500 mb-4">Create your first workspace to get started.</p>
+      <button id="btnNewEmpty" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[color:var(--accent)] text-white text-sm font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        New workspace
+      </button>
+    </div>
+  </main>
+
+  <!-- Modal: New Workspace -->
+  <div id="modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/40" data-close></div>
+    <div class="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 p-5 shadow-xl">
+      <h3 class="text-base font-semibold mb-3">Create workspace</h3>
+      <form id="formCreate" class="space-y-3">
+        <div>
+          <label for="wsName" class="text-sm">Name</label>
+          <input id="wsName" name="name" class="mt-1 w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950" placeholder="e.g. Marketing Sprint" required maxlength="60"/>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button type="button" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800" data-close>Cancel</button>
+          <button type="submit" class="px-3.5 py-2 rounded-xl bg-[color:var(--accent)] text-white">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  // ---------- Config ----------
+  const API_BASE = "https://odd-water-ea64.justinbhalla28.workers.dev"; // Worker routes
+  const SIGN_IN_PAGE = "sign-in.html"; // fallback if not authenticated
+  const WORKSPACE_PAGE = "solara.html"; // destination after selection
+
+  function getSessionJWT(){
+    const m = document.cookie.match(/(?:^|; )(?:stytch_session_jwt|solara_session_jwt)=([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    return localStorage.getItem("stytch_session_jwt") || localStorage.getItem("solara_session_jwt") || null;
+  }
+
+  function setAlert(kind, msg){
+    const el = document.getElementById('alert');
+    el.className = `mb-4 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`;
+    el.textContent = msg; el.classList.remove('hidden');
+    setTimeout(()=> el.classList.add('hidden'), 3500);
+  }
+
+  function showModal(on){
+    document.getElementById('modal').classList.toggle('hidden', !on);
+    if (on) document.getElementById('wsName').focus();
+  }
+
+  function cardSkeleton(){
+    return `<div class="rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
+      <div class="h-6 w-1/2 rounded skeleton mb-3"></div>
+      <div class="h-4 w-2/3 rounded skeleton"></div>
+    </div>`;
+  }
+
+  function wsCard(ws){
+    const initials = (ws.name||"?")
+      .split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
+    return `<article class="lift rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-[color:var(--accent)]/10 text-[color:var(--accent)] flex items-center justify-center font-semibold">${initials}</div>
+        <div class="flex-1">
+          <h4 class="font-semibold leading-tight">${escapeHtml(ws.name)}</h4>
+          <p class="text-xs text-gray-500">Updated <time datetime="${ws.updated_at||ws.created_at}">${timeAgo(ws.updated_at||ws.created_at)}</time></p>
+        </div>
+      </div>
+      <div class="mt-4 flex items-center gap-2">
+        <button data-open="${ws.id}" class="px-3 py-2 rounded-xl bg-[color:var(--accent)] text-white text-sm">Open</button>
+        <button data-rename="${ws.id}" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">Rename</button>
+        <button data-delete="${ws.id}" class="px-3 py-2 rounded-xl border border-red-200 text-red-700 text-sm">Delete</button>
+      </div>
+    </article>`;
+  }
+
+  function escapeHtml(s=''){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+  function timeAgo(iso){
+    const d = new Date(iso); const diff=(Date.now()-d.getTime())/1000;
+    if (diff<60) return `${Math.floor(diff)}s ago`;
+    if (diff<3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff<86400) return `${Math.floor(diff/3600)}h ago`;
+    return d.toLocaleDateString();
+  }
+
+  async function api(path, opts={}){
+    const token = getSessionJWT();
+    if (!token){ location.href = SIGN_IN_PAGE; return; }
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...(opts.headers||{})
+      },
+      credentials: 'include'
+    });
+    if (res.status === 401){ location.href = SIGN_IN_PAGE; return; }
+    return res;
+  }
+
+  async function loadWorkspaces(){
+    const grid = document.getElementById('grid');
+    grid.innerHTML = Array.from({length:6}).map(cardSkeleton).join('');
+    try{
+      const res = await api('/workspaces');
+      if(!res || !res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      const items = (data.workspaces||[]);
+      if (!items.length){
+        document.getElementById('empty').classList.remove('hidden');
+        grid.innerHTML = '';
+        return;
+      }
+      render(items);
+    }catch(e){
+      console.error(e);
+      setAlert('error','Could not fetch workspaces. Using local cache if available.');
+      const cache = JSON.parse(localStorage.getItem('solara_ws_cache')||'[]');
+      if (cache.length) render(cache); else { grid.innerHTML=''; document.getElementById('empty').classList.remove('hidden'); }
+    }
+  }
+
+  function render(items){
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const sort = document.getElementById('sort').value;
+    let rows = items.slice();
+    if (q) rows = rows.filter(w=>w.name.toLowerCase().includes(q));
+    if (sort==='az') rows.sort((a,b)=>a.name.localeCompare(b.name));
+    else rows.sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at));
+
+    localStorage.setItem('solara_ws_cache', JSON.stringify(rows));
+
+    const grid = document.getElementById('grid');
+    grid.innerHTML = rows.map(wsCard).join('');
+  }
+
+  // Actions
+  document.getElementById('btnNew').addEventListener('click',()=>showModal(true));
+  document.getElementById('btnNewEmpty').addEventListener('click',()=>showModal(true));
+  document.getElementById('modal').addEventListener('click', (e)=>{ if (e.target.matches('[data-close]')) showModal(false); });
+
+  document.getElementById('formCreate').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const name = document.getElementById('wsName').value.trim();
+    if (!name) return;
+    const res = await api('/workspaces', {method:'POST', body: JSON.stringify({name})});
+    if (res && res.ok){
+      showModal(false); setAlert('ok','Workspace created.');
+      const {workspace} = await res.json();
+      location.href = `${WORKSPACE_PAGE}?ws=${encodeURIComponent(workspace.id)}`;
+    } else { setAlert('error','Could not create workspace.'); }
+  });
+
+  document.getElementById('grid').addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button'); if (!btn) return;
+    const id = btn.getAttribute('data-open')||btn.getAttribute('data-rename')||btn.getAttribute('data-delete');
+    if (!id) return;
+    if (btn.hasAttribute('data-open')){
+      location.href = `${WORKSPACE_PAGE}?ws=${encodeURIComponent(id)}`;
+    } else if (btn.hasAttribute('data-rename')){
+      const name = prompt('New name?'); if (!name) return;
+      const res = await api(`/workspaces/${id}`, {method:'PATCH', body: JSON.stringify({name})});
+      if (res && res.ok){ setAlert('ok','Renamed.'); loadWorkspaces(); } else setAlert('error','Rename failed.');
+    } else if (btn.hasAttribute('data-delete')){
+      if (!confirm('Delete this workspace? This cannot be undone.')) return;
+      const res = await api(`/workspaces/${id}`, {method:'DELETE'});
+      if (res && res.ok){ setAlert('ok','Deleted.'); loadWorkspaces(); } else setAlert('error','Delete failed.');
+    }
+  });
+
+  document.getElementById('q').addEventListener('input', ()=>{
+    try{ const cache = JSON.parse(localStorage.getItem('solara_ws_cache')||'[]'); render(cache); }catch{}
+  });
+  document.getElementById('sort').addEventListener('change', ()=>{
+    try{ const cache = JSON.parse(localStorage.getItem('solara_ws_cache')||'[]'); render(cache); }catch{}
+  });
+
+  document.getElementById('btnSignOut').addEventListener('click', ()=>{
+    document.cookie = 'stytch_session_jwt=; Max-Age=0; path=/';
+    document.cookie = 'solara_session_jwt=; Max-Age=0; path=/';
+    localStorage.removeItem('stytch_session_jwt');
+    localStorage.removeItem('solara_session_jwt');
+    location.href = SIGN_IN_PAGE;
+  });
+
+  // Boot
+  loadWorkspaces();
+  </script>
+</body>
+</html>
