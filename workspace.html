@@ -66,7 +66,6 @@
     </div>
   </main>
 
-  <!-- Modal -->
   <div id="modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/40" data-close></div>
     <div class="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 p-5 shadow-xl">
@@ -85,34 +84,39 @@
   </div>
 
   <script>
-    const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev'; // update if different
-    const SIGN_IN_PAGE = 'sign-in.html';
-    const WORKSPACE_PAGE = 'solara.html';
+    const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev'; // set to your Worker
 
-    function sessionJWT(){ return localStorage.getItem('stytch_session_jwt') || null; }
+    function getCookie(name){ const m = document.cookie.match(new RegExp('(?:^|; )'+name+'=([^;]+)')); return m ? decodeURIComponent(m[1]) : null; }
+    function getSessionJWT(){ return localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt') || getCookie('stytch_session_jwt') || null; }
+
+    async function api(path, opts={}){
+      const token = getSessionJWT();
+      if (!token) { location.href = 'sign-in.html'; return; }
+      const res = await fetch(`${API_BASE}${path}`, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers||{}) } });
+      if (res.status === 401){ location.href = 'sign-in.html'; return; }
+      return res;
+    }
+
     function setAlert(kind, msg){ const el = document.getElementById('alert'); el.className = `mb-4 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`; el.textContent = msg; el.classList.remove('hidden'); setTimeout(()=> el.classList.add('hidden'), 3500); }
     function showModal(on){ document.getElementById('modal').classList.toggle('hidden', !on); if (on) document.getElementById('wsName').focus(); }
-    function cardSkeleton(){ return `<div class="rounded-2xl border border-gray-200 dark:border-gray-800 p-4"><div class="h-6 w-1/2 rounded skeleton mb-3"></div><div class="h-4 w-2/3 rounded skeleton"></div></div>`; }
-    function wsCard(ws){ const initials = (ws.name||"?").split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase(); return `<article class="lift rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950"><div class="flex items-start gap-3"><div class="w-10 h-10 rounded-xl bg-[color:var(--accent)]/10 text-[color:var(--accent)] flex items-center justify-center font-semibold">${initials}</div><div class="flex-1"><h4 class="font-semibold leading-tight">${escapeHtml(ws.name)}</h4><p class="text-xs text-gray-500">Updated <time datetime="${ws.updated_at||ws.created_at}">${timeAgo(ws.updated_at||ws.created_at)}</time></p></div></div><div class="mt-4 flex items-center gap-2"><button data-open="${ws.id}" class="px-3 py-2 rounded-xl bg-[color:var(--accent)] text-white text-sm">Open</button><button data-rename="${ws.id}" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">Rename</button><button data-delete="${ws.id}" class="px-3 py-2 rounded-xl border border-red-200 text-red-700 text-sm">Delete</button></div></article>`; }
+    function cardSkeleton(){ return `<div class=\"rounded-2xl border border-gray-200 dark:border-gray-800 p-4\"><div class=\"h-6 w-1/2 rounded skeleton mb-3\"></div><div class=\"h-4 w-2/3 rounded skeleton\"></div></div>`; }
+    function wsCard(ws){ const initials=(ws.name||'?').split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase(); return `<article class=\"lift rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950\"><div class=\"flex items-start gap-3\"><div class=\"w-10 h-10 rounded-xl bg-[color:var(--accent)]/10 text-[color:var(--accent)] flex items-center justify-center font-semibold\">${initials}</div><div class=\"flex-1\"><h4 class=\"font-semibold leading-tight\">${escapeHtml(ws.name)}</h4><p class=\"text-xs text-gray-500\">Updated <time datetime=\"${ws.updated_at||ws.created_at}\">${timeAgo(ws.updated_at||ws.created_at)}</time></p></div></div><div class=\"mt-4 flex items-center gap-2\"><button data-open=\"${ws.id}\" class=\"px-3 py-2 rounded-xl bg-[color:var(--accent)] text-white text-sm\">Open</button><button data-rename=\"${ws.id}\" class=\"px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm\">Rename</button><button data-delete=\"${ws.id}\" class=\"px-3 py-2 rounded-xl border border-red-200 text-red-700 text-sm\">Delete</button></div></article>`; }
     function escapeHtml(s=''){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
-    function timeAgo(iso){ const d = new Date(iso); const diff=(Date.now()-d.getTime())/1000; if (diff<60) return `${Math.floor(diff)}s ago`; if (diff<3600) return `${Math.floor(diff/60)}m ago`; if (diff<86400) return `${Math.floor(diff/3600)}h ago`; return d.toLocaleDateString(); }
-    async function api(path, opts={}){ const token = sessionJWT(); if (!token){ location.href = SIGN_IN_PAGE; return; } const res = await fetch(`${API_BASE}${path}`, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers||{}) } }); if (res.status === 401){ location.href = SIGN_IN_PAGE; return; } return res; }
+    function timeAgo(iso){ const d=new Date(iso); const diff=(Date.now()-d.getTime())/1000; if(diff<60) return `${Math.floor(diff)}s ago`; if(diff<3600) return `${Math.floor(diff/60)}m ago`; if(diff<86400) return `${Math.floor(diff/3600)}h ago`; return d.toLocaleDateString(); }
 
-    async function loadWorkspaces(){ const grid = document.getElementById('grid'); grid.innerHTML = Array.from({length:6}).map(cardSkeleton).join(''); try{ const res = await api('/workspaces'); if(!res || !res.ok) throw new Error('Failed to load'); const data = await res.json(); const items = (data.workspaces||[]); if (!items.length){ document.getElementById('empty').classList.remove('hidden'); grid.innerHTML = ''; return; } render(items); }catch(e){ console.error(e); setAlert('error','Could not fetch workspaces.'); grid.innerHTML=''; document.getElementById('empty').classList.remove('hidden'); } }
-
-    function render(items){ const q = document.getElementById('q').value.trim().toLowerCase(); const sort = document.getElementById('sort').value; let rows = items.slice(); if (q) rows = rows.filter(w=>w.name.toLowerCase().includes(q)); if (sort==='az') rows.sort((a,b)=>a.name.localeCompare(b.name)); else rows.sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at)); const grid = document.getElementById('grid'); grid.innerHTML = rows.map(wsCard).join(''); }
+    async function loadWorkspaces(){ const grid=document.getElementById('grid'); grid.innerHTML=Array.from({length:6}).map(cardSkeleton).join(''); try{ const res=await api('/workspaces'); if(!res) return; if(!res.ok) throw new Error(await res.text()); const data=await res.json(); const items=data.workspaces||[]; if(!items.length){ document.getElementById('empty').classList.remove('hidden'); grid.innerHTML=''; return; } render(items); }catch(e){ console.error(e); setAlert('error','Could not fetch workspaces.'); grid.innerHTML=''; document.getElementById('empty').classList.remove('hidden'); } }
+    function render(items){ const q=document.getElementById('q').value.trim().toLowerCase(); const sort=document.getElementById('sort').value; let rows=items.slice(); if(q) rows=rows.filter(w=>w.name.toLowerCase().includes(q)); if(sort==='az') rows.sort((a,b)=>a.name.localeCompare(b.name)); else rows.sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at)); const grid=document.getElementById('grid'); grid.innerHTML=rows.map(wsCard).join(''); }
 
     document.getElementById('btnNew').addEventListener('click',()=>showModal(true));
     document.getElementById('btnNewEmpty').addEventListener('click',()=>showModal(true));
-    document.getElementById('modal').addEventListener('click', (e)=>{ if (e.target.matches('[data-close]')) showModal(false); });
-    document.getElementById('formCreate').addEventListener('submit', async (e)=>{ e.preventDefault(); const name = document.getElementById('wsName').value.trim(); if (!name) return; const res = await api('/workspaces', {method:'POST', body: JSON.stringify({name})}); if (res && res.ok){ const {workspace} = await res.json(); location.href = `${WORKSPACE_PAGE}?ws=${encodeURIComponent(workspace.id)}`; } else { setAlert('error','Could not create workspace.'); }
-    });
-    document.getElementById('grid').addEventListener('click', async (e)=>{ const btn = e.target.closest('button'); if (!btn) return; const id = btn.getAttribute('data-open')||btn.getAttribute('data-rename')||btn.getAttribute('data-delete'); if (!id) return; if (btn.hasAttribute('data-open')){ location.href = `${WORKSPACE_PAGE}?ws=${encodeURIComponent(id)}`; } else if (btn.hasAttribute('data-rename')){ const name = prompt('New name?'); if (!name) return; const res = await api(`/workspaces/${id}`, {method:'PATCH', body: JSON.stringify({name})}); if (res && res.ok){ loadWorkspaces(); } else setAlert('error','Rename failed.'); } else if (btn.hasAttribute('data-delete')){ if (!confirm('Delete this workspace? This cannot be undone.')) return; const res = await api(`/workspaces/${id}`, {method:'DELETE'}); if (res && res.ok){ loadWorkspaces(); } else setAlert('error','Delete failed.'); } });
+    document.getElementById('modal').addEventListener('click',(e)=>{ if(e.target.matches('[data-close]')) showModal(false); });
+    document.getElementById('formCreate').addEventListener('submit', async (e)=>{ e.preventDefault(); const name=document.getElementById('wsName').value.trim(); if(!name) return; const res=await api('/workspaces',{method:'POST',body:JSON.stringify({name})}); if(res && res.ok){ const {workspace}=await res.json(); location.href=`solara.html?ws=${encodeURIComponent(workspace.id)}`; } else setAlert('error','Could not create workspace.'); });
+    document.getElementById('grid').addEventListener('click', async (e)=>{ const btn=e.target.closest('button'); if(!btn) return; const id=btn.getAttribute('data-open')||btn.getAttribute('data-rename')||btn.getAttribute('data-delete'); if(!id) return; if(btn.hasAttribute('data-open')){ location.href=`solara.html?ws=${encodeURIComponent(id)}`; } else if(btn.hasAttribute('data-rename')){ const name=prompt('New name?'); if(!name) return; const res=await api(`/workspaces/${id}`,{method:'PATCH',body:JSON.stringify({name})}); if(res && res.ok) loadWorkspaces(); else setAlert('error','Rename failed.'); } else if(btn.hasAttribute('data-delete')){ if(!confirm('Delete this workspace?')) return; const res=await api(`/workspaces/${id}`,{method:'DELETE'}); if(res && res.ok) loadWorkspaces(); else setAlert('error','Delete failed.'); } });
+
     document.getElementById('q').addEventListener('input', ()=>loadWorkspaces());
     document.getElementById('sort').addEventListener('change', ()=>loadWorkspaces());
-    document.getElementById('btnSignOut').addEventListener('click', ()=>{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); location.href = SIGN_IN_PAGE; });
+    document.getElementById('btnSignOut').addEventListener('click', ()=>{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); document.cookie='solara_session_jwt=; Path=/; Max-Age=0'; location.href='sign-in.html'; });
 
-    // Boot
     loadWorkspaces();
   </script>
 </body>
