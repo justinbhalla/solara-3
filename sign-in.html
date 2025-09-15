@@ -5,28 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Solara – Sign in</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{ --accent:#6366f1; --accent-ink:#4f46e5; --surface:#f8fafc; }
+    html,body{height:100%}
+    body{font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Inter", "Noto Sans", sans-serif}
+    .lift{transition:transform .15s ease, box-shadow .15s ease}
+    .lift:hover{transform:translateY(-1px)}
+  </style>
 </head>
-<body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+<body class="flex flex-col min-h-screen bg-[color:var(--surface)] text-gray-900">
   <main class="flex-1 grid place-items-center px-6 py-12">
     <div class="w-full max-w-md text-center">
-      <h2 class="mt-6 text-2xl font-bold">Sign in to continue</h2>
-      <button id="googleGo" class="mt-6 w-full px-5 py-3 rounded-xl bg-indigo-600 text-white font-semibold">Continue with Google</button>
+      <h2 class="mt-6 text-3xl font-extrabold leading-tight">Sign in to Solara</h2>
+      <p class="mt-2 text-gray-600">You'll be redirected to your workspace hub.</p>
+      <button id="googleGo" class="mt-8 w-full inline-flex items-center justify-center gap-3 px-5 py-3 rounded-xl bg-indigo-600 text-white font-semibold lift">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" class="w-5 h-5 bg-white rounded-sm" aria-hidden="true"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12 s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C33.64,6.053,29.084,4,24,4C12.955,4,4,12.955,4,24 s8.955,20,20,20s20-8.955,20-20C44,22.659,43.86,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.818C14.655,16.108,18.961,14,24,14c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C33.64,6.053,29.084,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.176,0,9.86-1.977,13.409-5.197l-6.19-5.238C29.211,35.091,26.715,36,24,36 c-5.202,0-9.619-3.317-11.283-7.946l-6.54,5.036C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-3.987,5.565l6.19,5.238 C36.996,39.205,44,34,44,24C44,22.659,43.86,21.35,43.611,20.083z"/></svg>
+        Continue with Google
+      </button>
+      <p class="mt-4 text-xs text-gray-500">No spam, ever.</p>
     </div>
   </main>
-
-<script type="module">
-  import { StytchHeadlessClient } from 'https://esm.sh/@stytch/vanilla-js/headless';
-  const STYTCH_PUBLIC_TOKEN = 'public-token-test-41b83ad2-8bb8-4787-8f9d-8005d9545bc8';
-  const stytch = new StytchHeadlessClient(STYTCH_PUBLIC_TOKEN);
-  const redirectTo = new URL('auth-call-back.html', location.href).toString();
-
-  async function startGoogle(){
-    await stytch.oauth.google.start({
-      login_redirect_url: redirectTo,
-      signup_redirect_url: redirectTo
+  <script type="module">
+    import { StytchHeadlessClient } from 'https://esm.sh/@stytch/vanilla-js/headless';
+    const STYTCH_PUBLIC_TOKEN = 'public-token-test-41b83ad2-8bb8-4787-8f9d-8005d9545bc8';
+    const stytch = new StytchHeadlessClient(STYTCH_PUBLIC_TOKEN);
+    const redirectTo = new URL('auth-call-back.html', location.href).toString();
+    document.getElementById('googleGo').addEventListener('click', async () => {
+      await stytch.oauth.google.start({ login_redirect_url: redirectTo, signup_redirect_url: redirectTo });
     });
-  }
-  document.getElementById('googleGo').addEventListener('click', startGoogle);
-</script>
+  </script>
 </body>
 </html>
