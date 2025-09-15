@@ -15,15 +15,11 @@
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-
-  <!-- Header -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div>
       <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
       <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
     </div>
-
-    <!-- Signed-in user (name → email → initials). No Google button. Visible by default; redirected if unauth. -->
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
         <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
@@ -41,14 +37,13 @@
     </div>
   </header>
 
-  <!-- Nav: left = section tabs, right = actions (Trash + Plus aligned to the right) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3h14v2H3V3zm0 4h9v2H3V7zm0 4h14v2H3v-2zm0 4h9v2H3v-2z"/></svg>
         <span>Tasks</span>
       </button>
-      <button onclick="window.location.href='reports.html'" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
+      <button onclick="window.location.href='reports.html'+location.search" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-4m4 4V8m4 8V5"/></svg>
         <span>Reports</span>
       </button>
@@ -61,7 +56,6 @@
     </div>
   </nav>
 
-  <!-- Main Board -->
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div id="todo" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
@@ -76,7 +70,6 @@
     </div>
   </main>
 
-  <!-- Bottom rail (tabs left + export right) -->
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3 overflow-x-auto">
       <div class="flex items-center gap-2 w-full overflow-x-auto px-1 py-1">
@@ -92,272 +85,99 @@
     <footer class="text-center text-xs text-gray-500 dark:text-gray-400 px-6 py-3 border-t border-gray-200 dark:border-gray-700">© 2025 ZenLock Group (ZLG). All rights reserved.</footer>
   </div>
 
-<script>
-/*************************
- *  CONFIG               *
- *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // your Worker or API domain
-const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+  <script>
+    const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev';
+    const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
 
-/**************
- *  STATE     *
- **************/
-let activeTab = null;
-let tabData = JSON.parse(localStorage.getItem('solara-tabs')) || {}; // { tabName: { todo:[], inprogress:[], done:[] } }
-let sessionJWT = null;
-let authedUser = null; // { name:{first_name,last_name}, email_addresses:[{email_address}] }
+    // State
+    let activeTab = null;
+    let sessionJWT = null;
+    let authedUser = null; // Stytch-ish user shape
+    let wsid = new URLSearchParams(location.search).get('ws') || null;
 
-/*******************
- *  UTILITIES       *
- *******************/
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
-function initialsFor(user){
-  const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
-  const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
-  if(fromName) return fromName.toUpperCase();
-  const email = user?.email_addresses?.[0]?.email_address || '?';
-  return email.slice(0,2).toUpperCase();
-}
-function displayNameFor(user){
-  const parts = [user?.name?.first_name, user?.name?.last_name].filter(Boolean);
-  if (parts.length) return parts.join(' ');
-  return user?.email_addresses?.[0]?.email_address || initialsFor(user);
-}
-function saveTabsToStorage(){ localStorage.setItem('solara-tabs', JSON.stringify(tabData)); }
+    // Namespaced local cache to stop cross-user leakage
+    const keyTabs = () => `solara:tabs:${(authedUser?.id||authedUser?.user_id||'anon')}:${wsid||'no-ws'}`;
 
-/*******************
- *  CLOUD SYNC       *
- *******************/
-const saveTabsToCloud = debounce(async ()=>{
-  if(!sessionJWT) return;
-  try{
-    const res = await fetch(apiUrl('tasks'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ tabs: tabData }) });
-    if(res.status === 401){ console.warn('Cloud save unauthorized'); return; }
-    if(!res.ok) console.warn('Cloud save failed', await res.text());
-  }catch(err){ console.warn('Cloud save error', err); }
-}, 450);
-async function loadTabsFromCloud(){
-  if(!sessionJWT) return false;
-  try{
-    const res = await fetch(apiUrl('tasks'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
-    if(res.status === 401) return false;
-    if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; } }
-  }catch(err){ console.warn('Cloud load error', err); }
-  return false;
-}
+    const debounce = (fn, ms = 500) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
 
-/*******************
- *  AUTH             *
- *******************/
-function requireReauth(){
-  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{}
-  location.replace('/sign-in.html');
-}
-function hydrateFromAuthCheckPayload(data){
-  // Accepts { email, name } and builds a Stytch-like user object
-  const full = (data?.name||'').trim();
-  const parts = full ? full.split(/\s+/) : [];
-  const first = parts[0] || '';
-  const last  = parts.slice(1).join(' ') || '';
-  const email = data?.email || '';
-  return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
-}
-function updateAuthUI(){
-  // Always render something; this page is auth-required anyway
-  const avatar = document.getElementById('avatar');
-  const nameEl = document.getElementById('userName');
-  const emailEl = document.getElementById('userEmail');
-  const u = authedUser || { name:{}, email_addresses:[] };
-  avatar.textContent = initialsFor(u);
-  nameEl.textContent = displayNameFor(u) || 'User';
-  emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
-}
-function wireAuthButtons(){
-  document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden');
-  document.addEventListener('click', (e)=>{
-    const m = document.getElementById('userMenu');
-    const b = document.getElementById('userButton');
-    if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
-  });
-  document.getElementById('signOutBtn').onclick = async () => {
-    try{ if(sessionJWT){ await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${sessionJWT}` } }).catch(()=>{}); } }
-    finally{ requireReauth(); }
-  };
-  document.getElementById('addUserBtn').onclick = async () => {
-    const email = prompt('Invite a user by email:');
-    if(!email) return;
-    if(!sessionJWT) return requireReauth();
-    try{
-      const res = await fetch(apiUrl('shares'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ email }) });
-      if(res.ok) alert('Invitation sent.'); else alert('Invite failed: ' + (await res.text()));
-    }catch(err){ alert('Invite error: ' + err.message); }
-  };
-}
-async function verifySessionAndHydrate(){
-  sessionJWT = localStorage.getItem('stytch_session_jwt');
-  authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
-  if(!sessionJWT) return false; // hard redirect to sign-in
+    function initialsFor(user){ const email = user?.email_addresses?.[0]?.email_address || user?.email || '?'; const name = [user?.name?.first_name, user?.name?.last_name].filter(Boolean).join(' '); const fromName = name.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join(''); return (fromName||email.slice(0,2)).toUpperCase(); }
+    function displayNameFor(user){ const parts = [user?.name?.first_name, user?.name?.last_name].filter(Boolean); if (parts.length) return parts.join(' '); return user?.email_addresses?.[0]?.email_address || user?.email || 'User'; }
 
-  // Render icon immediately with cached data (if any)
-  updateAuthUI();
+    function saveTabsToStorage(data){ try{ localStorage.setItem(keyTabs(), JSON.stringify(data)); }catch{} }
+    function loadTabsFromStorage(){ try{ return JSON.parse(localStorage.getItem(keyTabs())||'{}'); }catch{ return {}; } }
 
-  try{
-    const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
-    if(!res.ok){ return false; } // invalid/expired → sign-in
-    const data = await res.json();
-    if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
-      authedUser = hydrateFromAuthCheckPayload(data);
-      try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
-    } else {
-      // Optionally refresh email/name from server
-      const fresh = hydrateFromAuthCheckPayload(data);
-      if (fresh.email_addresses?.[0]?.email_address && !authedUser.email_addresses?.length){ authedUser.email_addresses = fresh.email_addresses; }
-      if ((fresh.name?.first_name||fresh.name?.last_name) && !(authedUser.name?.first_name||authedUser.name?.last_name)) authedUser.name = fresh.name;
-      try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
+    function updateAuthUI(){ const avatar=document.getElementById('avatar'); const nameEl=document.getElementById('userName'); const emailEl=document.getElementById('userEmail'); const u = authedUser || {}; avatar.textContent = initialsFor(u); nameEl.textContent = displayNameFor(u); emailEl.textContent = u?.email_addresses?.[0]?.email_address || u?.email || ''; }
+
+    function requireReauth(){ try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{} location.replace('/sign-in.html'); }
+
+    async function verifySessionAndHydrate(){ sessionJWT = localStorage.getItem('stytch_session_jwt'); authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null'); if(!sessionJWT) return false; updateAuthUI(); try{ const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } }); if(!res.ok) return false; const data = await res.json(); if (!authedUser){ authedUser = { id: data.user_id, email_addresses:[{ email_address: data.email }], name: { first_name: (data.name||'').split(' ')[0]||'', last_name: (data.name||'').split(' ').slice(1).join(' ')||'' } }; localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }
+      // Ensure ws param exists
+      if (!wsid){ // If none, go pick one
+        location.replace('workspace.html');
+        return false;
+      }
+      updateAuthUI();
+      return true;
+    }catch{ return !!authedUser; }
     }
-    updateAuthUI();
-    return true;
-  }catch(err){
-    // Network hiccup → allow local mode but keep icon from cache
-    return !!authedUser;
-  }
-}
 
-/*******************
- *  TABS             *
- *******************/
-function renderTabs(){
-  const tabsContainer = document.getElementById('tabs');
-  tabsContainer.innerHTML = '';
-  const names = Object.keys(tabData);
-  names.forEach(name => {
-    const tabBtn = document.createElement('button');
-    tabBtn.className = `tab-button px-4 py-1.5 rounded-full text-sm font-medium bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-white transition-all duration-150 truncate max-w-[160px]`;
-    if (name === activeTab){ tabBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); }
-    tabBtn.dataset.tab = name;
-    tabBtn.innerHTML = `<span>${name}</span>`;
-    tabBtn.onclick = () => switchTab(name);
-    tabBtn.ondblclick = () => {
-      const newName = prompt('Rename tab:', name);
-      if (!newName || !newName.trim() || newName === name || tabData[newName]) return;
-      tabData[newName] = tabData[name];
-      delete tabData[name];
-      if (activeTab === name) activeTab = newName;
-      saveTabsToStorage();
+    async function loadTabsFromCloud(){ if(!sessionJWT || !wsid) return null; const res = await fetch(apiUrl(`tasks?workspace_id=${encodeURIComponent(wsid)}`), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } }); if(!res.ok){ if (res.status===401) requireReauth(); return null; } const data = await res.json(); return data.tabs || {}; }
+
+    const saveTabsToCloud = debounce(async (tabsShape)=>{ if(!sessionJWT || !wsid) return; await fetch(apiUrl('tasks'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ workspace_id: wsid, tabs: tabsShape }) }); }, 400);
+
+    // UI: Tabs + Board (similar to your previous build but storage is namespaced)
+    let tabsShape = {};
+
+    function renderTabs(){ const tabs = Object.keys(tabsShape); const container=document.getElementById('tabs'); container.innerHTML=''; tabs.forEach(name=>{ const b=document.createElement('button'); b.className='tab-button px-4 py-1.5 rounded-full text-sm font-medium bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-white transition-all duration-150 truncate max-w-[160px]'; if(name===activeTab){ b.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } b.dataset.tab=name; b.textContent=name; b.onclick=()=>switchTab(name); b.ondblclick=()=>{ const newName=prompt('Rename tab:', name); if(!newName||!newName.trim()||tabsShape[newName]) return; tabsShape[newName]=tabsShape[name]; delete tabsShape[name]; activeTab=newName; saveTabsToStorage(tabsShape); renderTabs(); renderBoard(); saveTabsToCloud(tabsShape); }; b.oncontextmenu=(e)=>{ e.preventDefault(); deleteTab(name); }; container.appendChild(b); }); }
+
+    function promptNewTab(){ const name=prompt('Enter tab name:'); if(!name||!name.trim()||tabsShape[name]) return; tabsShape[name]={ todo:[], inprogress:[], done:[] }; saveTabsToStorage(tabsShape); renderTabs(); switchTab(name); saveTabsToCloud(tabsShape); }
+    function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabsShape[name]; if(activeTab===name) activeTab=Object.keys(tabsShape)[0]||null; saveTabsToStorage(tabsShape); renderTabs(); renderBoard(); saveTabsToCloud(tabsShape); }
+
+    function switchTab(name){ if(!tabsShape[name]) return; activeTab=name; document.querySelectorAll('.tab-button').forEach(btn=>btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30')); const btn=[...document.querySelectorAll('.tab-button')].find(b=>b.dataset.tab===name); if(btn) btn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); renderBoard(); }
+
+    function ensureAtLeastOneTask(){ const c=tabsShape[activeTab]; if(!c) return; if((c.todo?.length||0)+(c.inprogress?.length||0)+(c.done?.length||0)===0){ const id=`task-${Date.now()}`; c.todo.push({ id, content:'', dueDate:'', priority:'Medium' }); } }
+
+    function renderBoard(){ const cols=['todo','inprogress','done']; cols.forEach(col=>{ const el=document.getElementById(col); el.querySelectorAll('[data-task]')?.forEach(n=>n.remove()); el.ondragover=e=>{e.preventDefault(); el.classList.add('drag-over');}; el.ondragleave=()=>el.classList.remove('drag-over'); el.ondrop=e=>{ e.preventDefault(); el.classList.remove('drag-over'); const taskId=e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId,col); };
+    });
+      if(!activeTab || !tabsShape[activeTab]) return; ensureAtLeastOneTask(); const data=tabsShape[activeTab]; ['todo','inprogress','done'].forEach(col=>{ const el=document.getElementById(col); (data[col]||[]).forEach(t=>{ el.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); }); });
+    }
+
+    function createTaskElement(id, content='', dueDate='', priority='Medium', column){ const w=document.createElement('div'); w.id=id; w.setAttribute('data-task','1'); w.draggable=true; w.className='relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2'; w.setAttribute('data-column', column);
+      const editable=document.createElement('div'); editable.className='editable w-full font-medium mb-1'; editable.contentEditable=true; editable.innerText=content; const placeholder=document.createElement('span'); placeholder.className='absolute left-3 top-3 text-sm text-gray-400 pointer-events-none'; placeholder.textContent='Click to edit...'; const row=document.createElement('div'); row.className='flex items-center gap-2'; const dateInput=document.createElement('input'); dateInput.type='date'; dateInput.value=dueDate||''; dateInput.className='mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300'; const prioritySelect=document.createElement('select'); prioritySelect.className='mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); }); const deleteBtn=document.createElement('button'); deleteBtn.className='absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title='Delete Task'; deleteBtn.onclick=()=>{ if(confirm('Delete this task?')) removeTaskById(id); };
+      function togglePlaceholder(){ placeholder.style.display = editable.innerText.trim()==='' ? 'block' : 'none'; }
+      editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); });
+      editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() }));
+      dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: dateInput.value || '' }));
+      prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' }));
+      w.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', id); });
+      row.appendChild(dateInput); row.appendChild(prioritySelect); w.appendChild(editable); w.appendChild(placeholder); w.appendChild(row); w.appendChild(deleteBtn); togglePlaceholder(); return w; }
+
+    function persistTaskEdits(taskId, patch){ if(!activeTab || !tabsShape[activeTab]) return; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } } saveTabsToStorage(tabsShape); saveTabsToCloud(tabsShape); }
+    function removeTaskById(taskId){ if(!activeTab || !tabsShape[activeTab]) return; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } } saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); }
+    function moveTaskToColumn(taskId, target){ if(!activeTab || !tabsShape[activeTab]) return; let found=null; for(const col of ['todo','inprogress','done']){ const list=tabsShape[activeTab][col]||[]; const idx=list.findIndex(t=>t.id===taskId); if(idx!==-1){ found=list.splice(idx,1)[0]; break; } } if(found){ tabsShape[activeTab][target]=tabsShape[activeTab][target]||[]; tabsShape[activeTab][target].push(found); saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); } }
+    function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabsShape[activeTab] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); }
+    function addNewTask(){ if(!activeTab){ const def='Click to edit'; tabsShape[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); } const id=`task-${Date.now()}`; const t={ id, content:'', dueDate:'', priority:'Medium' }; tabsShape[activeTab].todo.push(t); saveTabsToStorage(tabsShape); renderBoard(); saveTabsToCloud(tabsShape); }
+
+    function exportBoardAsPDF(){ const board=document.getElementById('board'); html2pdf().set({ margin:.5, filename:'Solara-Board.pdf', image:{type:'jpeg',quality:.98}, html2canvas:{scale:2}, jsPDF:{unit:'in', format:'letter', orientation:'landscape'} }).from(board).save(); }
+
+    // User menu
+    function wireAuthButtons(){ document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden'); document.addEventListener('click', (e)=>{ const m=document.getElementById('userMenu'); const b=document.getElementById('userButton'); if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden'); }); document.getElementById('signOutBtn').onclick=()=>{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); location.replace('sign-in.html'); }; document.getElementById('addUserBtn').onclick=async()=>{ const email=prompt('Invite a user by email:'); if(!email) return; await fetch(apiUrl('shares'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ workspace_id: wsid, email }) }); alert('If the email is valid, an invite was queued.'); } }
+
+    // Boot
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      const ok = await verifySessionAndHydrate(); if(!ok) return;
+      // Load from cloud first to avoid stale previous-user leakage
+      let cloudTabs = await loadTabsFromCloud();
+      if (!cloudTabs || Object.keys(cloudTabs).length===0) {
+        // fall back to local cache (namespaced)
+        cloudTabs = loadTabsFromStorage();
+      }
+      tabsShape = cloudTabs && Object.keys(cloudTabs).length ? cloudTabs : { 'Click to edit': { todo:[], inprogress:[], done:[] } };
+      activeTab = Object.keys(tabsShape)[0];
       renderTabs();
       switchTab(activeTab);
-      saveTabsToCloud();
-    };
-    tabBtn.oncontextmenu = (e) => { e.preventDefault(); deleteTab(name); };
-    tabsContainer.appendChild(tabBtn);
-  });
-}
-function promptNewTab(){ const name = prompt('Enter tab name:'); if(!name || !name.trim()) return; addTab(name.trim()); }
-function addTab(name){ if(tabData[name]) return switchTab(name); tabData[name] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(); renderTabs(); switchTab(name); saveTabsToCloud(); }
-function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabData[name]; if(activeTab===name) activeTab = Object.keys(tabData)[0]||null; saveTabsToStorage(); renderTabs(); renderBoard(); saveTabsToCloud(); }
-
-/*******************
- *  BOARD LOGIC      *
- *******************/
-function switchTab(tabName){ if(!tabData[tabName]) return; activeTab = tabName; document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30')); const activeBtn = Array.from(document.querySelectorAll('.tab-button')).find(b => b.dataset.tab===tabName); if(activeBtn){ activeBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } renderBoard(); }
-
-function ensureAtLeastOneTask(){ const cols = tabData[activeTab]; if(!cols) return; if((cols.todo?.length||0)+(cols.inprogress?.length||0)+(cols.done?.length||0)===0){ const id = `task-${Date.now()}`; cols.todo.push({ id, content:'', dueDate:'', priority:'Medium' }); } }
-
-function renderBoard(){
-  const columns = ['todo','inprogress','done'];
-  // prepare lanes DnD
-  columns.forEach(col => {
-    const colEl = document.getElementById(col);
-    // clear existing tasks
-    colEl.querySelectorAll('[data-task]')?.forEach(n => n.remove());
-    // set DnD
-    colEl.ondragover = (e)=>{ e.preventDefault(); colEl.classList.add('drag-over'); };
-    colEl.ondragleave = ()=> colEl.classList.remove('drag-over');
-    colEl.ondrop = (e)=>{ e.preventDefault(); colEl.classList.remove('drag-over'); const taskId = e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId, col); };
-  });
-  if(!activeTab || !tabData[activeTab]) return;
-  ensureAtLeastOneTask();
-  const data = tabData[activeTab];
-  columns.forEach(col => {
-    const colEl = document.getElementById(col);
-    (data[col]||[]).forEach(t => { colEl.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); });
-  });
-}
-
-function createTaskElement(id, content='', dueDate='', priority='Medium', column){
-  const wrapper = document.createElement('div');
-  wrapper.id = id; wrapper.setAttribute('data-task','1'); wrapper.draggable = true; wrapper.className = 'relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2'; wrapper.setAttribute('data-column', column);
-
-  const editable = document.createElement('div'); editable.className = 'editable w-full font-medium mb-1'; editable.contentEditable = true; editable.innerText = content;
-  const placeholder = document.createElement('span'); placeholder.className = 'absolute left-3 top-3 text-sm text-gray-400 pointer-events-none'; placeholder.textContent = 'Click to edit...';
-  function togglePlaceholder(){ placeholder.style.display = editable.innerText.trim()==='' ? 'block' : 'none'; }
-
-  const row = document.createElement('div'); row.className = 'flex items-center gap-2';
-  const dateInput = document.createElement('input'); dateInput.type = 'date'; dateInput.value = dueDate || ''; dateInput.className = 'mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300';
-  const prioritySelect = document.createElement('select'); prioritySelect.className = 'mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); });
-  const deleteBtn = document.createElement('button'); deleteBtn.className = 'absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title = 'Delete Task'; deleteBtn.onclick = () => { if(confirm('Delete this task?')) removeTaskById(id); };
-
-  editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); });
-  editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() }));
-  dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: dateInput.value || '' }));
-  prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' }));
-  wrapper.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', id); });
-
-  row.appendChild(dateInput); row.appendChild(prioritySelect);
-  wrapper.appendChild(editable); wrapper.appendChild(placeholder); wrapper.appendChild(row); wrapper.appendChild(deleteBtn);
-  togglePlaceholder();
-  return wrapper;
-}
-
-function persistTaskEdits(taskId, patch){
-  if(!activeTab || !tabData[activeTab]) return;
-  const cols = ['todo','inprogress','done'];
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } }
-  saveTabsToStorage(); saveTabsToCloud();
-}
-function removeTaskById(taskId){
-  if(!activeTab || !tabData[activeTab]) return;
-  const cols = ['todo','inprogress','done'];
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } }
-  saveTabsToStorage(); renderBoard(); saveTabsToCloud();
-}
-function moveTaskToColumn(taskId, targetCol){
-  if(!activeTab || !tabData[activeTab]) return;
-  const cols = ['todo','inprogress','done'];
-  let found=null;
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ found = list.splice(idx,1)[0]; break; } }
-  if(found){ tabData[activeTab][targetCol] = tabData[activeTab][targetCol]||[]; tabData[activeTab][targetCol].push(found); saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
-}
-function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabData[activeTab] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
-function addNewTask(){ if(!activeTab){ const def='Click to edit'; if(!tabData[def]) tabData[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); }
-  const id = `task-${Date.now()}`; const t = { id, content:'', dueDate:'', priority:'Medium' }; tabData[activeTab].todo.push(t); saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
-
-/*******************
- *  EXPORT           *
- *******************/
-function exportBoardAsPDF(){ const board = document.getElementById('board'); html2pdf().set({ margin:.5, filename:'Solara-Board.pdf', image:{type:'jpeg',quality:.98}, html2canvas:{scale:2}, jsPDF:{unit:'in', format:'letter', orientation:'landscape'} }).from(board).save(); }
-
-/*******************
- *  BOOT             *
- *******************/
-document.addEventListener('DOMContentLoaded', async () => {
-  // Require session; show placeholder avatar until hydrated
-  const ok = await verifySessionAndHydrate();
-  if(!ok) return requireReauth();
-
-  // Ensure a default tab
-  if(Object.keys(tabData).length===0){ const def='Click to edit'; tabData[def] = { todo:[], inprogress:[], done:[] }; }
-  activeTab = Object.keys(tabData)[0];
-  renderTabs();
-  switchTab(activeTab);
-
-  // Wire header buttons
-  wireAuthButtons();
-
-  // Try cloud load
-  const loaded = await loadTabsFromCloud();
-  if(loaded){ if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab; renderTabs(); switchTab(activeTab); }
-});
-</script>
+      wireAuthButtons();
+    });
+  </script>
 </body>
 </html>
