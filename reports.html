@@ -6,10 +6,7 @@
   <title>Solara – Reports</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <style>
-    .card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)}
-    .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
-  </style>
+  <style>.card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)} .menu-card{box-shadow:0 10px 20px rgba(0,0,0,.08);}</style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
@@ -24,9 +21,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
       </button>
       <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl menu-card bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div class="px-4 py-3 text-sm">
-          <div id="userEmail" class="text-gray-600 dark:text-gray-300"></div>
-        </div>
+        <div class="px-4 py-3 text-sm"><div id="userEmail" class="text-gray-600 dark:text-gray-300"></div></div>
         <div class="border-t border-gray-100 dark:border-gray-700"></div>
         <button id="signOutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</button>
       </div>
@@ -94,52 +89,23 @@
 
   <script>
     const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev';
-    const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+    const wsid = new URLSearchParams(location.search).get('ws');
+    if(!wsid) location.replace('workspace.html');
 
-    let sessionJWT = null; let authedUser = null; const wsid = new URLSearchParams(location.search).get('ws') || null;
-    const keyTabs = () => `solara:tabs:${(authedUser?.id||authedUser?.user_id||'anon')}:${wsid||'no-ws'}`;
+    function getCookie(name){ const m=document.cookie.match(new RegExp('(?:^|; )'+name+'=([^;]+)')); return m ? decodeURIComponent(m[1]) : null; }
+    function getSessionJWT(){ return localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt') || getCookie('stytch_session_jwt') || null; }
 
-    function requireReauth(){ try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{} location.replace('/sign-in.html'); }
-    function initialsFor(user){ const email = user?.email_addresses?.[0]?.email_address || user?.email || '?'; const name = [user?.name?.first_name, user?.name?.last_name].filter(Boolean).join(' '); const fromName = name.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join(''); return (fromName||email.slice(0,2)).toUpperCase(); }
-    function displayNameFor(user){ const parts=[user?.name?.first_name, user?.name?.last_name].filter(Boolean); if(parts.length) return parts.join(' '); return user?.email_addresses?.[0]?.email_address || user?.email || 'User'; }
-    function updateAuthUI(){ const avatar=document.getElementById('avatar'); const nameEl=document.getElementById('userName'); const emailEl=document.getElementById('userEmail'); const u = authedUser || {}; avatar.textContent = initialsFor(u); nameEl.textContent = displayNameFor(u); emailEl.textContent = u?.email_addresses?.[0]?.email_address || u?.email || ''; }
+    function keyTabs(){ const uid=(JSON.parse(localStorage.getItem('stytch_user')||'{}')?.id)||'anon'; return `solara:tabs:${uid}:${wsid}`; }
 
-    async function verifySessionAndHydrate(){ sessionJWT=localStorage.getItem('stytch_session_jwt'); authedUser=JSON.parse(localStorage.getItem('stytch_user')||'null'); if(!sessionJWT) return false; updateAuthUI(); try{ const res=await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } }); if(!res.ok) return false; const data=await res.json(); if(!authedUser){ authedUser={ id:data.user_id, email_addresses:[{ email_address:data.email }], name:{ first_name:(data.name||'').split(' ')[0]||'', last_name:(data.name||'').split(' ').slice(1).join(' ')||'' } }; localStorage.setItem('stytch_user', JSON.stringify(authedUser)); } if(!wsid){ location.replace('workspace.html'); return false; } updateAuthUI(); return true; }catch{ return !!authedUser; } }
+    async function verifySession(){ const token=getSessionJWT(); if(!token){ location.href='sign-in.html'; return false; } const res=await fetch(`${API_BASE}/auth/check`,{ headers:{Authorization:`Bearer ${token}`}}); if(res.status===401){ location.href='sign-in.html'; return false; } return true; }
 
-    async function fetchCloudTabs(){ if(!sessionJWT||!wsid) return null; const res=await fetch(apiUrl(`tasks?workspace_id=${encodeURIComponent(wsid)}`), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } }); if(!res.ok){ if(res.status===401) requireReauth(); return null; } const data=await res.json(); return data.tabs||{}; }
-    function localTabs(){ try{ return JSON.parse(localStorage.getItem(keyTabs())||'{}'); }catch{ return {}; } }
+    async function fetchCloudTabs(){ const token=getSessionJWT(); const res=await fetch(`${API_BASE}/tasks?workspace_id=${encodeURIComponent(wsid)}`,{ headers:{Authorization:`Bearer ${token}`}}); if(!res.ok) return {}; const data=await res.json(); return data.tabs||{}; }
 
-    function getAllTasks(tabs){ const out=[]; Object.keys(tabs||{}).forEach(name=>{ ['todo','inprogress','done'].forEach(s=>{ (tabs[name]?.[s]||[]).forEach(task=>out.push({ ...task, status:s, tab:name })); }); }); return out; }
-    function computeMetrics(tabs){ const tasks=getAllTasks(tabs); const now=new Date(); let total=tasks.length, todo=0, inprogress=0, done=0, overdue=0; const priority={ High:0, Medium:0, Low:0 }; let ageSum=0; tasks.forEach(t=>{ if(t.status==='todo') todo++; else if(t.status==='inprogress') inprogress++; else if(t.status==='done') done++; const p=t.priority||'Medium'; if(priority[p]!==undefined) priority[p]++; if(t.status!=='done' && t.dueDate){ const d=new Date(t.dueDate); if(!isNaN(d) && d<now) overdue++; } const m=String(t.id||'').match(/task-(\d+)/); if(m){ const created=new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum += (now - created)/(1000*60*60*24); }
-    });
-      const completionRate= total ? Math.round((done/total)*100) : 0; const avgAge= total ? Math.round(ageSum/total) : 0; return { total, todo, inprogress, done, completionRate, overdue, avgAge, priority };
-    }
+    function getAllTasks(tabs){ const out=[]; Object.keys(tabs||{}).forEach(tabName=>{ ['todo','inprogress','done'].forEach(st=>{ (tabs[tabName]?.[st]||[]).forEach(task=> out.push({ ...task, status:st, tab:tabName })); }); }); return out; }
+    function computeMetrics(tabs){ const tasks=getAllTasks(tabs); const now=new Date(); let total=tasks.length, todo=0, inprogress=0, done=0, overdue=0; const priority={High:0,Medium:0,Low:0}; let ageSum=0; tasks.forEach(t=>{ if(t.status==='todo') todo++; else if(t.status==='inprogress') inprogress++; else if(t.status==='done') done++; const p=t.priority||'Medium'; if(priority[p]!==undefined) priority[p]++; if(t.status!=='done' && t.dueDate){ const d=new Date(t.dueDate); if(!isNaN(d) && d<now) overdue++; } const m=String(t.id||'').match(/task-(\d+)/); if(m){ const created=new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum += (now - created)/(1000*60*60*24); } }); const completionRate= total? Math.round((done/total)*100):0; const avgAge= total? Math.round(ageSum/total):0; return { total, todo, inprogress, done, completionRate, overdue, avgAge, priority } }
 
-    function paintDefaultCards(tabs){ const m=computeMetrics(tabs); document.getElementById('todoCount').textContent=m.todo; document.getElementById('inprogressCount').textContent=m.inprogress; document.getElementById('doneCount').textContent=m.done; document.getElementById('totalCount').textContent=m.total; document.getElementById('completionRate').textContent=m.completionRate + '%'; document.querySelectorAll('#report-area .card').forEach(card=>{ const title=card.querySelector('h3')?.textContent?.trim(); if(title==='Overdue Tasks'){ const kpi=card.querySelector('[data-kpi]'); if(kpi) kpi.textContent=m.overdue; } else if(title==='Avg Task Age'){ const kpi=card.querySelector('[data-kpi]'); if(kpi) kpi.textContent=m.avgAge + 'd'; } else if(title==='Priority Distribution'){ const spans=card.querySelectorAll('[data-pri]'); if(spans.length>=3){ spans[0].textContent=m.priority.High; spans[1].textContent=m.priority.Medium; spans[2].textContent=m.priority.Low; } } }); }
+    function paint(tabs){ const m=computeMetrics(tabs); document.getElementById('todoCount').textContent=m.todo; document.getElementById('inprogressCount').textContent=m.inprogress; document.getElementById('doneCount').textContent=m.done; document.getElementById('totalCount').textContent=m.total; document.getElementById('completionRate').textContent=m.completionRate+'%'; document.querySelectorAll('#report-area .card').forEach(card=>{ const title=card.querySelector('h3')?.textContent?.trim(); if(title==='Overdue Tasks'){ card.querySelector('[data-kpi]').textContent=m.overdue; } else if(title==='Avg Task Age'){ card.querySelector('[data-kpi]').textContent=m.avgAge+'d'; } else if(title==='Priority Distribution'){ const spans=card.querySelectorAll('[data-pri]'); if(spans.length>=3){ spans[0].textContent=m.priority.High; spans[1].textContent=m.priority.Medium; spans[2].textContent=m.priority.Low; } } }); }
 
-    const predefinedReports=[
+    const extra=[
       { title:'Overdue Tasks', desc:'Tasks past their due date across tabs.', icon:'<svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', body:'<div class="text-2xl font-bold text-red-500 text-center" data-kpi>--</div>' },
-      { title:'Avg Task Age', desc:'Average duration since task creation.', icon:'<svg class="h-6 w-6 text-yellow-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', body:'<div class="text-2xl font-bold text-yellow-500 text-center" data-kpi>--</div>' },
-      { title:'Priority Distribution', desc:'Tasks grouped by priority across all tabs.', icon:'<svg class="h-6 w-6 text-purple-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>', body:'<ul class="text-sm font-medium space-y-1 text-gray-800 dark:text-gray-200"><li class="flex justify-between"><span>High</span><span data-pri>--</span></li><li class="flex justify-between"><span>Medium</span><span data-pri>--</span></li><li class="flex justify-between"><span>Low</span><span data-pri>--</span></li></ul>' }
-    ];
-
-    function addReportBlock(){ const area=document.getElementById('report-area'); const existing=[...area.children].map(el=>el.querySelector('h3')?.textContent?.trim()); const next=predefinedReports.find(r=>!existing.includes(r.title)); if(!next){ alert('All predefined reports are already added.'); return; } const card=document.createElement('div'); card.className='bg-white dark:bg-gray-800 p-6 rounded-xl card'; card.innerHTML = `<div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold">${next.title}</h3>${next.icon}</div><p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${next.desc}</p>${next.body}`; area.appendChild(card); // refresh KPIs
-      const tabs = JSON.parse(localStorage.getItem(keyTabs())||'{}'); paintDefaultCards(tabs);
-    }
-    function clearReports(){ const area=document.getElementById('report-area'); while(area.children.length>2){ area.removeChild(area.lastElementChild); } }
-
-    function exportReportsAsPDF(){ const element=document.getElementById('report-area'); if(!element) return alert('No report area found.'); html2pdf().set({ margin:.5, filename:'Solara-Report.pdf', image:{ type:'jpeg', quality:.98 }, html2canvas:{ scale:2 }, jsPDF:{ unit:'in', format:'letter', orientation:'portrait' } }).from(element).save(); }
-
-    // Boot
-    document.addEventListener('DOMContentLoaded', async ()=>{
-      const ok = await verifySessionAndHydrate(); if(!ok) return requireReauth();
-      const cloud = await fetchCloudTabs(); const tabs = (cloud && Object.keys(cloud).length) ? cloud : (JSON.parse(localStorage.getItem(keyTabs())||'{}'));
-      localStorage.setItem(keyTabs(), JSON.stringify(tabs));
-      paintDefaultCards(tabs);
-      document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden');
-      document.addEventListener('click', (e)=>{ const m=document.getElementById('userMenu'); const b=document.getElementById('userButton'); if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden'); });
-      document.getElementById('signOutBtn').onclick=()=>{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); location.replace('sign-in.html'); };
-    });
-  </script>
-</body>
-</html>
+      { title:'Avg Task Age', desc:'Average duration since task creation.', icon:'<svg class="h-6 w-6 text-yellow-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l
