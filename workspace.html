@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Solara — Your Workspaces</title>
+  <link rel="preconnect" href="https://crimson-hill-6a85.justinbhalla28.workers.dev" crossorigin>
+  <link rel="preconnect" href="https://test.stytch.com" crossorigin>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .card{box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.06)}
@@ -14,6 +16,7 @@
   </style>
 </head>
 <body class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+  <!-- Header (parity with solara: avatar + menu) -->
   <header class="sticky top-0 z-30 backdrop-blur bg-white/70 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl bg-indigo-600/10 flex items-center justify-center">🔷</div>
@@ -21,9 +24,22 @@
         <h1 class="text-xl font-semibold leading-tight">Your Workspaces</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400">Pick an existing workspace or create a new one.</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-3">
         <button id="btnNew" class="lift inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-sm">New workspace</button>
-        <button id="btnSignOut" class="lift inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">Sign out</button>
+        <div id="userArea" class="relative">
+          <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+            <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
+            <span id="userName" class="text-sm font-medium">User</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
+          </button>
+          <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 overflow-hidden card">
+            <div class="px-4 py-3 text-sm">
+              <div id="userEmail" class="text-gray-600 dark:text-gray-300"></div>
+            </div>
+            <div class="border-t border-gray-100 dark:border-gray-700"></div>
+            <button id="btnSignOut" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</button>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -42,6 +58,7 @@
           <option value="az">Sort: A → Z</option>
         </select>
       </div>
+      <button id="btnRefresh" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">Refresh</button>
     </div>
 
     <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
@@ -54,10 +71,10 @@
     </div>
   </main>
 
-  <!-- Sticky footer (optional helper text) -->
+  <!-- Sticky footer (helper) -->
   <div class="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 border-t border-gray-200 dark:border-gray-800">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-      <span>Need help? Ensure your Worker has bindings: <code>DB</code>, <code>STYTCH_PROJECT_ID</code>, <code>STYTCH_SECRET</code>.</span>
+      <span>If you see auth loops, confirm cookie <code>solara_session_jwt</code> and <code>ALLOWED_ORIGINS</code> in the Worker.</span>
       <a id="healthLink" target="_blank" class="underline decoration-dotted">Check API health</a>
     </div>
   </div>
@@ -82,32 +99,48 @@
 
   <script>
     // ========= CONFIG =========
-    const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev'; // <-- set to your worker URL
+    const API_BASE = 'https://crimson-hill-6a85.justinbhalla28.workers.dev';
     const base = () => API_BASE.replace(/\/+$/, '');
     document.getElementById('healthLink').href = base() + '/__health';
 
-    // ========= UTIL =========
+    // ========= SESSION / USER (parity with solara) =========
     const getCookie = (name) => { const m=document.cookie.match(new RegExp('(?:^|; )'+name+'=([^;]+)')); return m?decodeURIComponent(m[1]):null; };
-    const getJWT = () => localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt');
-    const escapeHtml = (s='') => s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]||m));
-    const timeAgo = (iso) => { const d=new Date(iso); const diff=(Date.now()-d.getTime())/1000; if(diff<60) return `${Math.floor(diff)}s ago`; if(diff<3600) return `${Math.floor(diff/60)}m ago`; if(diff<86400) return `${Math.floor(diff/3600)}h ago`; return d.toLocaleDateString(); };
-
-    function setAlert(kind, msg){ const el=document.getElementById('alert'); el.className=`mb-4 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`; el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3500); }
-
-    async function api(path, opts={}){
-      const token = getJWT(); if(!token){ location.href='sign-in.html'; return; }
-      const res = await fetch(`${base()}${path}`, { ...opts, mode:'cors', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, ...(opts.headers||{}) } });
-      if (res.status === 401) { location.href='sign-in.html'; return; }
-      // Some stacks still return 500 {"error":"unauthorized"} — treat as 401
-      if (res.status === 500) {
-        try { const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) { location.href='sign-in.html'; return; } } catch {}
-      }
-      if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-      return res;
+    const getJWT = () => getCookie('solara_session_jwt') || localStorage.getItem('stytch_session_jwt') || localStorage.getItem('solara_session_jwt');
+    function decodeJWTSub(jwt){
+      try { const [,p] = jwt.split('.'); const json = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/'))); return json.sub || json.user_id || null; } catch { return null; }
+    }
+    function initialsFor(user){
+      const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
+      const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
+      if(fromName) return fromName.toUpperCase();
+      const email = user?.email_addresses?.[0]?.email_address || '?';
+      return email.slice(0,2).toUpperCase();
+    }
+    function displayNameFor(user){
+      const parts = [user?.name?.first_name, user?.name?.last_name].filter(Boolean);
+      if (parts.length) return parts.join(' ');
+      return user?.email_addresses?.[0]?.email_address || initialsFor(user);
+    }
+    function hydrateFromAuthCheckPayload(data){
+      const full = (data?.name||'').trim();
+      const parts = full ? full.split(/\s+/) : [];
+      const first = parts[0] || '';
+      const last  = parts.slice(1).join(' ') || '';
+      const email = data?.email || '';
+      return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
+    }
+    function updateUserUI(u){
+      const avatar = document.getElementById('avatar');
+      const nameEl = document.getElementById('userName');
+      const emailEl = document.getElementById('userEmail');
+      avatar.textContent = initialsFor(u);
+      nameEl.textContent = displayNameFor(u) || 'User';
+      if (emailEl) emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
     }
 
-    function cardSkeleton(){ return `<article class=\"rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950\">\n  <div class=\"h-6 w-1/2 rounded skeleton mb-3\"></div>\n  <div class=\"h-4 w-2/3 rounded skeleton\"></div>\n</article>`; }
-
+    // ========= ALERT / UI =========
+    function setAlert(kind, msg){ const el=document.getElementById('alert'); el.className=`mb-4 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`; el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3500); }
+    function cardSkeleton(){ return `<article class=\"rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950 card\">\n  <div class=\"h-6 w-1/2 rounded skeleton mb-3\"></div>\n  <div class=\"h-4 w-2/3 rounded skeleton\"></div>\n</article>`; }
     function wsCard(ws){ const initials=(ws.name||'?').split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase(); return `
       <article class="lift rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950 card">
         <div class="flex items-start gap-3">
@@ -123,33 +156,74 @@
           <button data-delete="${ws.id}" class="px-3 py-2 rounded-xl border border-red-200 text-red-700 text-sm">Delete</button>
         </div>
       </article>`; }
+    const escapeHtml = (s='') => s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]||m));
+    const timeAgo = (iso) => { const d=new Date(iso); const diff=(Date.now()-d.getTime())/1000; if(diff<60) return `${Math.floor(diff)}s ago`; if(diff<3600) return `${Math.floor(diff/60)}m ago`; if(diff<86400) return `${Math.floor(diff/3600)}h ago`; return d.toLocaleDateString(); };
 
-    function showModal(on){ const m=document.getElementById('modal'); m.classList.toggle('hidden',!on); if(on) setTimeout(()=>document.getElementById('wsName').focus(),0); }
+    // ========= API helper (parity with solara) =========
+    async function api(path, opts={}){
+      const token = getJWT(); if(!token){ location.href='sign-in.html'; return; }
+      const r = await fetch(`${base()}${path}`, { ...opts, mode:'cors', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, ...(opts.headers||{}) } });
+      if (r.status === 401) { location.href='sign-in.html'; return; }
+      // Some stacks return 500 with {error:"unauthorized"}
+      if (r.status === 500) {
+        try { const body = await r.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) { location.href='sign-in.html'; return; } } catch {}
+      }
+      if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`);
+      return r;
+    }
+
+    // ========= DATA =========
+    let workspacesCache = [];
 
     async function loadWorkspaces(){
       const grid=document.getElementById('grid');
       grid.innerHTML = Array.from({length:6}).map(cardSkeleton).join('');
       try{
-        const res=await api('/workspaces'); if(!res) return; const data=await res.json(); const items=data.workspaces||[];
-        if(!items.length){ document.getElementById('empty').classList.remove('hidden'); grid.innerHTML=''; return; }
-        render(items);
-      }catch(e){ setAlert('error','Could not fetch workspaces: '+e.message); document.getElementById('empty').classList.remove('hidden'); grid.innerHTML=''; }
+        const [authRes, wsRes] = await Promise.allSettled([
+          api('/auth/check'),
+          api('/workspaces')
+        ]);
+
+        if (authRes.status === 'fulfilled' && authRes.value) {
+          try { const d = await authRes.value.json(); const u = hydrateFromAuthCheckPayload(d); updateUserUI(u); localStorage.setItem('stytch_user', JSON.stringify(u)); } catch{}
+        } else {
+          const u = JSON.parse(localStorage.getItem('stytch_user')||'null'); if(u) updateUserUI(u);
+        }
+
+        if (wsRes.status === 'fulfilled' && wsRes.value) {
+          const data = await wsRes.value.json();
+          workspacesCache = data.workspaces || [];
+          if(!workspacesCache.length){ document.getElementById('empty').classList.remove('hidden'); grid.innerHTML=''; return; }
+          render();
+        } else {
+          throw new Error('Failed to load workspace list');
+        }
+      }catch(e){
+        setAlert('error','Could not fetch workspaces: ' + e.message);
+        document.getElementById('empty').classList.remove('hidden');
+        grid.innerHTML='';
+      }
     }
 
-    function render(items){
+    function render(){
       const q=document.getElementById('q').value.trim().toLowerCase();
       const sort=document.getElementById('sort').value;
-      let rows=items.slice();
+      let rows=workspacesCache.slice();
       if(q) rows=rows.filter(w=> (w.name||'').toLowerCase().includes(q));
       if(sort==='az') rows.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
       else rows.sort((a,b)=> new Date(b.updated_at||b.created_at) - new Date(a.updated_at||a.created_at));
       document.getElementById('grid').innerHTML = rows.map(wsCard).join('');
     }
 
-    // Handlers
+    // ========= UI wiring =========
     document.getElementById('btnNew').addEventListener('click',()=>showModal(true));
     document.getElementById('btnNewEmpty').addEventListener('click',()=>showModal(true));
+    document.getElementById('btnRefresh').addEventListener('click', loadWorkspaces);
     document.getElementById('modal').addEventListener('click',(e)=>{ if(e.target.matches('[data-close]')) showModal(false); });
+    document.getElementById('userButton').addEventListener('click', ()=> document.getElementById('userMenu').classList.toggle('hidden'));
+    document.addEventListener('click', (e)=>{ const m=document.getElementById('userMenu'); const b=document.getElementById('userButton'); if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden'); });
+
+    function showModal(on){ const m=document.getElementById('modal'); m.classList.toggle('hidden',!on); if(on) setTimeout(()=>document.getElementById('wsName').focus(),0); }
 
     document.getElementById('formCreate').addEventListener('submit', async (e)=>{
       e.preventDefault(); const name=document.getElementById('wsName').value.trim(); if(!name) return;
@@ -164,13 +238,24 @@
       if(btn.hasAttribute('data-delete')){ if(!confirm('Delete this workspace? This cannot be undone.')) return; try{ await api(`/workspaces/${id}`,{ method:'DELETE' }); setAlert('ok','Deleted.'); loadWorkspaces(); } catch(err){ setAlert('error','Delete failed: '+err.message); } }
     });
 
-    document.getElementById('q').addEventListener('input', async ()=>{ try{ const res=await api('/workspaces'); if(!res) return; const data=await res.json(); render(data.workspaces||[]); }catch{} });
-    document.getElementById('sort').addEventListener('change', ()=>{ document.getElementById('q').dispatchEvent(new Event('input')); });
+    document.getElementById('q').addEventListener('input', render);
+    document.getElementById('sort').addEventListener('change', render);
 
-    document.getElementById('btnSignOut').addEventListener('click', ()=>{ document.cookie='solara_session_jwt=; Max-Age=0; Path=/'; localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); location.href='sign-in.html'; });
+    document.getElementById('btnSignOut').addEventListener('click', ()=>{
+      document.cookie='solara_session_jwt=; Max-Age=0; Path=/';
+      localStorage.removeItem('stytch_session_jwt');
+      localStorage.removeItem('solara_session_jwt');
+      localStorage.removeItem('stytch_user');
+      location.href='sign-in.html';
+    });
 
     // Boot
-    (async ()=>{ try{ await api('/auth/check'); }catch{} loadWorkspaces(); })();
+    (async ()=>{
+      const jwt = getJWT(); if(!jwt){ location.href='sign-in.html'; return; }
+      // Set avatar immediately from cache if present
+      try{ const u = JSON.parse(localStorage.getItem('stytch_user')||'null'); if(u) updateUserUI(u); }catch{}
+      loadWorkspaces();
+    })();
   </script>
 </body>
 </html>
