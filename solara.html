@@ -15,18 +15,19 @@
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-
+  
   <!-- Header -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div class="flex items-start gap-3">
-      <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
-      <!-- Indigo icon linking back to workspace hub -->
-      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-6 h-6 rounded-md bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
+      <!-- Indigo icon far left → links to Workspace Hub -->
+      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
       </a>
-      <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
+      </div>
     </div>
-
     <!-- Signed-in user (name → email → initials). Visible by default; redirected if unauth. -->
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
@@ -45,7 +46,7 @@
     </div>
   </header>
 
-  <!-- Nav: left = section tabs, right = actions -->
+  <!-- Nav: left = section tabs, right = actions (Trash + Plus aligned to the right) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
@@ -100,14 +101,17 @@
 /*************************
  *  CONFIG               *
  *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev";
+const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // Worker base URL
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+const params = new URLSearchParams(location.search);
+const WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
+if (WS) try{ localStorage.setItem('solara_ws', WS); }catch{}
 
 /**************
  *  STATE     *
  **************/
 let activeTab = null;
-let tabData = JSON.parse(localStorage.getItem('solara-tabs')) || {};
+let tabData = JSON.parse(localStorage.getItem('solara-tabs')) || {}; // { tabName: { todo:[], inprogress:[], done:[] } }
 let sessionJWT = null;
 let authedUser = null; // { name:{first_name,last_name}, email_addresses:[{email_address}] }
 
@@ -133,19 +137,19 @@ function saveTabsToStorage(){ localStorage.setItem('solara-tabs', JSON.stringify
  *  CLOUD SYNC       *
  *******************/
 const saveTabsToCloud = debounce(async ()=>{
-  const token = localStorage.getItem('stytch_session_jwt');
-  if(!token) return;
+  if(!sessionJWT) return;
   try{
-    const res = await fetch(apiUrl('tasks'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` }, body: JSON.stringify({ tabs: tabData }) });
+    const url = apiUrl('tasks' + (WS ? `?ws=${encodeURIComponent(WS)}` : ''));
+    const res = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) }, body: JSON.stringify({ tabs: tabData }) });
     if(res.status === 401){ console.warn('Cloud save unauthorized'); return; }
     if(!res.ok) console.warn('Cloud save failed', await res.text());
   }catch(err){ console.warn('Cloud save error', err); }
 }, 450);
 async function loadTabsFromCloud(){
-  const token = localStorage.getItem('stytch_session_jwt');
-  if(!token) return false;
+  if(!sessionJWT) return false;
   try{
-    const res = await fetch(apiUrl('tasks'), { headers:{ 'Authorization':`Bearer ${token}` } });
+    const url = apiUrl('tasks' + (WS ? `?ws=${encodeURIComponent(WS)}` : ''));
+    const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) } });
     if(res.status === 401) return false;
     if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; } }
   }catch(err){ console.warn('Cloud load error', err); }
@@ -160,6 +164,7 @@ function requireReauth(){
   location.replace('/sign-in.html');
 }
 function hydrateFromAuthCheckPayload(data){
+  // Accepts { email, name } and builds a Stytch-like user object
   const full = (data?.name||'').trim();
   const parts = full ? full.split(/\s+/) : [];
   const first = parts[0] || '';
@@ -168,6 +173,7 @@ function hydrateFromAuthCheckPayload(data){
   return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
 function updateAuthUI(){
+  // Always render something; this page is auth-required anyway
   const avatar = document.getElementById('avatar');
   const nameEl = document.getElementById('userName');
   const emailEl = document.getElementById('userEmail');
@@ -184,17 +190,15 @@ function wireAuthButtons(){
     if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
   });
   document.getElementById('signOutBtn').onclick = async () => {
-    const token = localStorage.getItem('stytch_session_jwt');
-    try{ if(token){ await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${token}` } }).catch(()=>{}); } }
+    try{ if(sessionJWT){ await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${sessionJWT}` } }).catch(()=>{}); } }
     finally{ requireReauth(); }
   };
   document.getElementById('addUserBtn').onclick = async () => {
     const email = prompt('Invite a user by email:');
     if(!email) return;
-    const token = localStorage.getItem('stytch_session_jwt');
-    if(!token) return requireReauth();
+    if(!sessionJWT) return requireReauth();
     try{
-      const res = await fetch(apiUrl('shares'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` }, body: JSON.stringify({ email }) });
+      const res = await fetch(apiUrl('shares'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ email }) });
       if(res.ok) alert('Invitation sent.'); else alert('Invite failed: ' + (await res.text()));
     }catch(err){ alert('Invite error: ' + err.message); }
   };
@@ -204,10 +208,14 @@ async function verifySessionAndHydrate(){
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
   if(!sessionJWT) return false; // hard redirect to sign-in
 
+  // Render icon immediately with cached data (if any)
   updateAuthUI();
 
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
+    if(res.status === 500){
+      try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) return false; }catch{}
+    }
     if(!res.ok){ return false; }
     const data = await res.json();
     if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
@@ -222,12 +230,13 @@ async function verifySessionAndHydrate(){
     updateAuthUI();
     return true;
   }catch(err){
+    // Network hiccup → allow local mode but keep icon from cache
     return !!authedUser;
   }
 }
 
 /*******************
- *  TABS & BOARD     *
+ *  TABS             *
  *******************/
 function renderTabs(){
   const tabsContainer = document.getElementById('tabs');
@@ -259,15 +268,21 @@ function promptNewTab(){ const name = prompt('Enter tab name:'); if(!name || !na
 function addTab(name){ if(tabData[name]) return switchTab(name); tabData[name] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(); renderTabs(); switchTab(name); saveTabsToCloud(); }
 function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabData[name]; if(activeTab===name) activeTab = Object.keys(tabData)[0]||null; saveTabsToStorage(); renderTabs(); renderBoard(); saveTabsToCloud(); }
 
+/*******************
+ *  BOARD LOGIC      *
+ *******************/
 function switchTab(tabName){ if(!tabData[tabName]) return; activeTab = tabName; document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30')); const activeBtn = Array.from(document.querySelectorAll('.tab-button')).find(b => b.dataset.tab===tabName); if(activeBtn){ activeBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } renderBoard(); }
 
 function ensureAtLeastOneTask(){ const cols = tabData[activeTab]; if(!cols) return; if((cols.todo?.length||0)+(cols.inprogress?.length||0)+(cols.done?.length||0)===0){ const id = `task-${Date.now()}`; cols.todo.push({ id, content:'', dueDate:'', priority:'Medium' }); } }
 
 function renderBoard(){
   const columns = ['todo','inprogress','done'];
+  // prepare lanes DnD
   columns.forEach(col => {
     const colEl = document.getElementById(col);
+    // clear existing tasks
     colEl.querySelectorAll('[data-task]')?.forEach(n => n.remove());
+    // set DnD
     colEl.ondragover = (e)=>{ e.preventDefault(); colEl.classList.add('drag-over'); };
     colEl.ondragleave = ()=> colEl.classList.remove('drag-over');
     colEl.ondrop = (e)=>{ e.preventDefault(); colEl.classList.remove('drag-over'); const taskId = e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId, col); };
@@ -275,7 +290,7 @@ function renderBoard(){
   if(!activeTab || !tabData[activeTab]) return;
   ensureAtLeastOneTask();
   const data = tabData[activeTab];
-  ['todo','inprogress','done'].forEach(col => {
+  columns.forEach(col => {
     const colEl = document.getElementById(col);
     (data[col]||[]).forEach(t => { colEl.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); });
   });
@@ -338,13 +353,20 @@ function exportBoardAsPDF(){ const board = document.getElementById('board'); htm
  *  BOOT             *
  *******************/
 document.addEventListener('DOMContentLoaded', async () => {
+  // Require session; show placeholder avatar until hydrated
   const ok = await verifySessionAndHydrate();
   if(!ok) return requireReauth();
+
+  // Ensure a default tab
   if(Object.keys(tabData).length===0){ const def='Click to edit'; tabData[def] = { todo:[], inprogress:[], done:[] }; }
   activeTab = Object.keys(tabData)[0];
   renderTabs();
   switchTab(activeTab);
+
+  // Wire header buttons
   wireAuthButtons();
+
+  // Try cloud load (workspace-aware)
   const loaded = await loadTabsFromCloud();
   if(loaded){ if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab; renderTabs(); switchTab(activeTab); }
 });
