@@ -11,21 +11,37 @@
     .lift:hover{transform:translateY(-1px)}
     .skeleton{background:linear-gradient(90deg,rgba(0,0,0,.06),rgba(0,0,0,.12),rgba(0,0,0,.06));background-size:200% 100%;animation:shimmer 1.2s infinite}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .menu-card{ box-shadow: 0 10px 20px rgba(0,0,0,.08); }
   </style>
 </head>
 <body class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-
-  <!-- Header -->
+  <!-- Header with avatar/user menu -->
   <header class="sticky top-0 z-30 backdrop-blur bg-white/70 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
-      <div class="w-9 h-9 rounded-xl bg-indigo-600/10 flex items-center justify-center">🔷</div>
-      <div class="flex-1">
-        <h1 class="text-xl font-semibold leading-tight">Your Workspaces</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Pick an existing workspace or create a new one.</p>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600/10 flex items-center justify-center">🔷</div>
+        <div>
+          <h1 class="text-xl font-semibold leading-tight">Your Workspaces</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Pick an existing workspace or create a new one.</p>
+        </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-3">
         <button id="btnNew" class="lift inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-sm">New workspace</button>
-        <button id="btnSignOut" class="lift inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">Sign out</button>
+        <!-- User menu (avatar/name/email + sign out) -->
+        <div id="userArea" class="relative">
+          <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+            <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
+            <span id="userName" class="text-sm font-medium">User</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
+          </button>
+          <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl menu-card bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div class="px-4 py-3 text-sm">
+              <div id="userEmail" class="text-gray-600 dark:text-gray-300"></div>
+            </div>
+            <div class="border-t border-gray-100 dark:border-gray-700"></div>
+            <button id="signOutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</button>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -34,18 +50,13 @@
   <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
     <div id="alert" class="hidden mb-4 p-3 rounded-xl text-sm"></div>
 
-    <div class="mb-5 flex flex-col sm:flex-row gap-3 items-center">
-      <div class="flex-1 w-full">
-        <label class="sr-only" for="q">Search</label>
-        <input id="q" type="search" placeholder="Search by name…" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950" />
-      </div>
-      <div>
-        <label class="sr-only" for="sort">Sort</label>
-        <select id="sort" class="px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
-          <option value="recent">Sort: Recently used</option>
-          <option value="az">Sort: A → Z</option>
-        </select>
-      </div>
+    <!-- Controls row: sort only (search removed) -->
+    <div class="mb-5 flex items-center justify-end">
+      <label class="sr-only" for="sort">Sort</label>
+      <select id="sort" class="px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+        <option value="recent">Sort: Recently used</option>
+        <option value="az">Sort: A → Z</option>
+      </select>
     </div>
 
     <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
@@ -61,7 +72,7 @@
   <!-- Sticky helper -->
   <div class="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 border-t border-gray-200 dark:border-gray-800">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-      <span>Ensure Worker bindings exist: <code>DB</code>, <code>STYTCH_PROJECT_ID</code>, <code>STYTCH_SECRET</code>.</span>
+      <span>Worker bindings required: <code>DB</code>, <code>STYTCH_PROJECT_ID</code>, <code>STYTCH_SECRET</code>.</span>
       <a id="healthLink" target="_blank" class="underline decoration-dotted">Check API health</a>
     </div>
   </div>
@@ -90,17 +101,66 @@
     const base = () => API_BASE.replace(/\/+$/, '');
     document.getElementById('healthLink').href = base() + '/__health';
 
+    // ===== AUTH / USER UI =====
+    const getCookie = (n)=>{ const m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]+)')); return m?decodeURIComponent(m[1]):null; };
+    const getJWT = ()=> localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt');
+    const initialsFor = (user)=>{
+      const full=((user?.name?.first_name||'')+' '+(user?.name?.last_name||'')).trim();
+      const fromName=full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
+      if(fromName) return fromName.toUpperCase();
+      const email = user?.email_addresses?.[0]?.email_address || '?';
+      return email.slice(0,2).toUpperCase();
+    };
+    const displayNameFor = (user)=>{
+      const parts=[user?.name?.first_name,user?.name?.last_name].filter(Boolean); if(parts.length) return parts.join(' ');
+      return user?.email_addresses?.[0]?.email_address || initialsFor(user);
+    };
+    function hydrateFromAuthCheckPayload(data){
+      const full=(data?.name||'').trim(); const parts=full?full.split(/\s+/):[];
+      const first=parts[0]||''; const last=parts.slice(1).join(' ')||''; const email=data?.email||'';
+      return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
+    }
+    let authedUser = null;
+    async function verifySessionAndHydrate(){
+      const jwt=getJWT(); if(!jwt) return false;
+      try{
+        const res=await fetch(base()+'/auth/check',{headers:{'Authorization':`Bearer ${jwt}`}});
+        if(!res.ok) return false;
+        const data=await res.json();
+        authedUser = JSON.parse(localStorage.getItem('stytch_user')||'null');
+        if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
+          authedUser = hydrateFromAuthCheckPayload(data);
+          try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
+        }
+        updateAuthUI();
+        return true;
+      }catch{ return false; }
+    }
+    function updateAuthUI(){
+      const avatar=document.getElementById('avatar'); const nameEl=document.getElementById('userName'); const emailEl=document.getElementById('userEmail');
+      const u = authedUser || { name:{}, email_addresses:[] };
+      avatar.textContent = initialsFor(u);
+      nameEl.textContent = displayNameFor(u) || 'User';
+      emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
+    }
+    function wireAuthButtons(){
+      document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden');
+      document.addEventListener('click',(e)=>{
+        const m=document.getElementById('userMenu'); const b=document.getElementById('userButton');
+        if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
+      });
+      document.getElementById('signOutBtn').onclick = ()=>{
+        document.cookie='solara_session_jwt=; Max-Age=0; Path=/';
+        localStorage.removeItem('stytch_session_jwt');
+        localStorage.removeItem('stytch_user');
+        location.href='sign-in.html';
+      };
+    }
+
     // ===== UTIL =====
-    const getCookie = (name) => { const m=document.cookie.match(new RegExp('(?:^|; )'+name+'=([^;]+)')); return m?decodeURIComponent(m[1]):null; };
-    const getJWT = () => localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt');
     const escapeHtml = (s='') => s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]||m));
     const timeAgo = (iso) => { const d=new Date(iso); const diff=(Date.now()-d.getTime())/1000; if(diff<60) return `${Math.floor(diff)}s ago`; if(diff<3600) return `${Math.floor(diff/60)}m ago`; if(diff<86400) return `${Math.floor(diff/3600)}h ago`; return d.toLocaleDateString(); };
-
-    function setAlert(kind, msg){
-      const el=document.getElementById('alert');
-      el.className=`mb-4 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`;
-      el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3500);
-    }
+    function setAlert(kind, msg){ const el=document.getElementById('alert'); el.className=`mb-4 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`; el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3500); }
 
     async function api(path, opts={}){
       const token = getJWT(); if(!token){ location.href='sign-in.html'; return; }
@@ -111,10 +171,8 @@
       return res;
     }
 
-    function cardSkeleton(){ return `<article class="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950"><div class="h-6 w-1/2 rounded skeleton mb-3"></div><div class="h-4 w-2/3 rounded skeleton"></div></article>`; }
-    function wsCard(ws){
-      const initials=(ws.name||'?').split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
-      return `
+    function cardSkeleton(){ return `<article class=\"rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950\"><div class=\"h-6 w-1/2 rounded skeleton mb-3\"></div><div class=\"h-4 w-2/3 rounded skeleton\"></div></article>`; }
+    function wsCard(ws){ const initials=(ws.name||'?').split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase(); return `
       <article class="lift rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-950 card">
         <div class="flex items-start gap-3">
           <div class="w-10 h-10 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-semibold">${initials}</div>
@@ -128,8 +186,7 @@
           <button data-rename="${ws.id}" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 text-sm">Rename</button>
           <button data-delete="${ws.id}" class="px-3 py-2 rounded-xl border border-red-200 text-red-700 text-sm">Delete</button>
         </div>
-      </article>`;
-    }
+      </article>`; }
 
     function showModal(on){ const m=document.getElementById('modal'); m.classList.toggle('hidden',!on); if(on) setTimeout(()=>document.getElementById('wsName').focus(),0); }
 
@@ -137,8 +194,7 @@
       const grid=document.getElementById('grid');
       grid.innerHTML = Array.from({length:6}).map(cardSkeleton).join('');
       try{
-        const res=await api('/workspaces'); if(!res) return;
-        const data=await res.json(); const items=data.workspaces||[];
+        const res=await api('/workspaces'); if(!res) return; const data=await res.json(); const items=data.workspaces||[];
         localStorage.setItem('solara_ws_cache', JSON.stringify(items));
         if(!items.length){ document.getElementById('empty').classList.remove('hidden'); grid.innerHTML=''; return; }
         render(items);
@@ -150,10 +206,8 @@
     }
 
     function render(items){
-      const q=document.getElementById('q').value.trim().toLowerCase();
       const sort=document.getElementById('sort').value;
       let rows=items.slice();
-      if(q) rows=rows.filter(w=> (w.name||'').toLowerCase().includes(q));
       if(sort==='az') rows.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
       else rows.sort((a,b)=> new Date(b.updated_at||b.created_at) - new Date(a.updated_at||a.created_at));
       document.getElementById('grid').innerHTML = rows.map(wsCard).join('');
@@ -165,52 +219,30 @@
     document.getElementById('modal').addEventListener('click',(e)=>{ if(e.target.matches('[data-close]')) showModal(false); });
 
     document.getElementById('formCreate').addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const name=document.getElementById('wsName').value.trim();
-      if(!name) return;
+      e.preventDefault(); const name=document.getElementById('wsName').value.trim(); if(!name) return;
       try{
-        const res=await api('/workspaces',{ method:'POST', body: JSON.stringify({ name }) });
-        if(!res) return;
-        const { workspace }=await res.json();
+        const res=await api('/workspaces',{ method:'POST', body: JSON.stringify({ name }) }); if(!res) return; const { workspace }=await res.json();
         localStorage.setItem('solara_last_ws', String(workspace.id));
         location.href=`solara.html?ws=${encodeURIComponent(workspace.id)}`;
-      }catch(err){ setAlert('error','Create failed: '+err.message); }
+      } catch(err){ setAlert('error','Create failed: '+err.message); }
     });
 
     document.getElementById('grid').addEventListener('click', async (e)=>{
-      const btn=e.target.closest('button'); if(!btn) return;
-      const id=btn.getAttribute('data-open')||btn.getAttribute('data-rename')||btn.getAttribute('data-delete'); if(!id) return;
-      if(btn.hasAttribute('data-open')){
-        localStorage.setItem('solara_last_ws', String(id));
-        location.href=`solara.html?ws=${encodeURIComponent(id)}`; return;
-      }
-      if(btn.hasAttribute('data-rename')){
-        const name=prompt('New name?'); if(!name) return;
-        try{ await api(`/workspaces/${id}`,{ method:'PATCH', body: JSON.stringify({ name }) }); setAlert('ok','Renamed.'); loadWorkspaces(); } catch(err){ setAlert('error','Rename failed: '+err.message); }
-        return;
-      }
-      if(btn.hasAttribute('data-delete')){
-        if(!confirm('Delete this workspace? This cannot be undone.')) return;
-        try{ await api(`/workspaces/${id}`,{ method:'DELETE' }); setAlert('ok','Deleted.'); loadWorkspaces(); } catch(err){ setAlert('error','Delete failed: '+err.message); }
-      }
+      const btn=e.target.closest('button'); if(!btn) return; const id=btn.getAttribute('data-open')||btn.getAttribute('data-rename')||btn.getAttribute('data-delete'); if(!id) return;
+      if(btn.hasAttribute('data-open')){ localStorage.setItem('solara_last_ws', String(id)); location.href=`solara.html?ws=${encodeURIComponent(id)}`; return; }
+      if(btn.hasAttribute('data-rename')){ const name=prompt('New name?'); if(!name) return; try{ await api(`/workspaces/${id}`,{ method:'PATCH', body: JSON.stringify({ name }) }); setAlert('ok','Renamed.'); loadWorkspaces(); } catch(err){ setAlert('error','Rename failed: '+err.message); } return; }
+      if(btn.hasAttribute('data-delete')){ if(!confirm('Delete this workspace? This cannot be undone.')) return; try{ await api(`/workspaces/${id}`,{ method:'DELETE' }); setAlert('ok','Deleted.'); loadWorkspaces(); } catch(err){ setAlert('error','Delete failed: '+err.message); } }
     });
 
-    document.getElementById('q').addEventListener('input', ()=>{
-      try{ const cache=JSON.parse(localStorage.getItem('solara_ws_cache')||'[]'); render(cache); }catch{}
-    });
-    document.getElementById('sort').addEventListener('change', ()=>{
-      try{ const cache=JSON.parse(localStorage.getItem('solara_ws_cache')||'[]'); render(cache); }catch{}
-    });
-
-    document.getElementById('btnSignOut').addEventListener('click', ()=>{
-      document.cookie='solara_session_jwt=; Max-Age=0; Path=/';
-      localStorage.removeItem('stytch_session_jwt');
-      localStorage.removeItem('stytch_user');
-      location.href='sign-in.html';
-    });
+    document.getElementById('sort').addEventListener('change', ()=>{ try{ const cache=JSON.parse(localStorage.getItem('solara_ws_cache')||'[]'); render(cache); }catch{} });
 
     // Boot
-    (async ()=>{ try{ await api('/auth/check'); }catch{} loadWorkspaces(); })();
+    (async ()=>{
+      const ok = await verifySessionAndHydrate();
+      if(!ok){ location.href='sign-in.html'; return; }
+      wireAuthButtons();
+      loadWorkspaces();
+    })();
   </script>
 </body>
 </html>
