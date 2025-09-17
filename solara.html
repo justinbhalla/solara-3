@@ -15,11 +15,9 @@
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-  
-  <!-- Header -->
+  <!-- Header: icon at far left → Solara title + subtitle; icon links back to workspace hub -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div class="flex items-start gap-3">
-      <!-- Indigo icon far left → links to Workspace Hub -->
       <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
       </a>
@@ -46,7 +44,7 @@
     </div>
   </header>
 
-  <!-- Nav: left = section tabs, right = actions (Trash + Plus aligned to the right) -->
+  <!-- Nav: left = section tabs, right = actions (Trash + Plus) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
@@ -101,10 +99,10 @@
 /*************************
  *  CONFIG               *
  *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // Worker base URL
+const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // Worker API
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
 const params = new URLSearchParams(location.search);
-const WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
+let WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
 if (WS) try{ localStorage.setItem('solara_ws', WS); }catch{}
 
 /**************
@@ -137,21 +135,29 @@ function saveTabsToStorage(){ localStorage.setItem('solara-tabs', JSON.stringify
  *  CLOUD SYNC       *
  *******************/
 const saveTabsToCloud = debounce(async ()=>{
-  if(!sessionJWT) return;
+  if(!sessionJWT || !WS) return;
   try{
-    const url = apiUrl('tasks' + (WS ? `?ws=${encodeURIComponent(WS)}` : ''));
-    const res = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) }, body: JSON.stringify({ tabs: tabData }) });
+    const res = await fetch(apiUrl('tasks' + (WS?`?ws=${encodeURIComponent(WS)}`:'')), {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) },
+      body: JSON.stringify({ ws: WS, tabs: tabData })
+    });
     if(res.status === 401){ console.warn('Cloud save unauthorized'); return; }
     if(!res.ok) console.warn('Cloud save failed', await res.text());
   }catch(err){ console.warn('Cloud save error', err); }
 }, 450);
 async function loadTabsFromCloud(){
-  if(!sessionJWT) return false;
+  if(!sessionJWT || !WS) return false;
   try{
-    const url = apiUrl('tasks' + (WS ? `?ws=${encodeURIComponent(WS)}` : ''));
-    const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) } });
+    const res = await fetch(apiUrl('tasks' + (WS?`?ws=${encodeURIComponent(WS)}`:'')), { headers:{ 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) } });
+    if(res.status === 500){
+      try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) return false; }catch{}
+    }
     if(res.status === 401) return false;
-    if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; } }
+    if(res.ok){
+      const data = await res.json();
+      if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; }
+    }
   }catch(err){ console.warn('Cloud load error', err); }
   return false;
 }
@@ -164,7 +170,6 @@ function requireReauth(){
   location.replace('/sign-in.html');
 }
 function hydrateFromAuthCheckPayload(data){
-  // Accepts { email, name } and builds a Stytch-like user object
   const full = (data?.name||'').trim();
   const parts = full ? full.split(/\s+/) : [];
   const first = parts[0] || '';
@@ -173,7 +178,6 @@ function hydrateFromAuthCheckPayload(data){
   return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
 function updateAuthUI(){
-  // Always render something; this page is auth-required anyway
   const avatar = document.getElementById('avatar');
   const nameEl = document.getElementById('userName');
   const emailEl = document.getElementById('userEmail');
@@ -206,10 +210,9 @@ function wireAuthButtons(){
 async function verifySessionAndHydrate(){
   sessionJWT = localStorage.getItem('stytch_session_jwt');
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
-  if(!sessionJWT) return false; // hard redirect to sign-in
+  if(!sessionJWT) return false; // redirect to sign-in
 
-  // Render icon immediately with cached data (if any)
-  updateAuthUI();
+  updateAuthUI(); // render icon immediately (cached)
 
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
@@ -222,6 +225,7 @@ async function verifySessionAndHydrate(){
       authedUser = hydrateFromAuthCheckPayload(data);
       try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
     } else {
+      // Refresh missing pieces if server provides them
       const fresh = hydrateFromAuthCheckPayload(data);
       if (fresh.email_addresses?.[0]?.email_address && !authedUser.email_addresses?.length){ authedUser.email_addresses = fresh.email_addresses; }
       if ((fresh.name?.first_name||fresh.name?.last_name) && !(authedUser.name?.first_name||authedUser.name?.last_name)) authedUser.name = fresh.name;
@@ -230,8 +234,7 @@ async function verifySessionAndHydrate(){
     updateAuthUI();
     return true;
   }catch(err){
-    // Network hiccup → allow local mode but keep icon from cache
-    return !!authedUser;
+    return !!authedUser; // tolerate network hiccup
   }
 }
 
@@ -277,7 +280,7 @@ function ensureAtLeastOneTask(){ const cols = tabData[activeTab]; if(!cols) retu
 
 function renderBoard(){
   const columns = ['todo','inprogress','done'];
-  // prepare lanes DnD
+  // prep lanes DnD
   columns.forEach(col => {
     const colEl = document.getElementById(col);
     // clear existing tasks
@@ -353,11 +356,19 @@ function exportBoardAsPDF(){ const board = document.getElementById('board'); htm
  *  BOOT             *
  *******************/
 document.addEventListener('DOMContentLoaded', async () => {
+  // Require a workspace context
+  if(!WS){
+    // If you hit this, navigate back to the hub to choose a workspace
+    alert('No workspace selected. Go to workspace hub.');
+    location.replace('workspace.html');
+    return;
+  }
+
   // Require session; show placeholder avatar until hydrated
   const ok = await verifySessionAndHydrate();
   if(!ok) return requireReauth();
 
-  // Ensure a default tab
+  // Ensure a default tab locally so the UI is never empty
   if(Object.keys(tabData).length===0){ const def='Click to edit'; tabData[def] = { todo:[], inprogress:[], done:[] }; }
   activeTab = Object.keys(tabData)[0];
   renderTabs();
@@ -366,7 +377,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Wire header buttons
   wireAuthButtons();
 
-  // Try cloud load (workspace-aware)
+  // Pull cloud (workspace-aware). On success, re-render board & tabs.
   const loaded = await loadTabsFromCloud();
   if(loaded){ if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab; renderTabs(); switchTab(activeTab); }
 });
