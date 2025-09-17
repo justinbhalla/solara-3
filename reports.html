@@ -9,16 +9,18 @@
   <style>
     .card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)}
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
-    .skeleton{background:linear-gradient(90deg,rgba(0,0,0,.06),rgba(0,0,0,.12),rgba(0,0,0,.06));background-size:200% 100%;animation:shimmer 1.2s infinite}
-    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
 
-  <!-- Header -->
+  <!-- Header (user menu only) -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-    <div>
+    <div class="flex items-start gap-3">
       <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
+      <!-- Indigo icon linking back to workspace hub -->
+      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-6 h-6 rounded-md bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
+      </a>
       <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
     </div>
     <div id="userArea" class="relative">
@@ -37,10 +39,10 @@
     </div>
   </header>
 
-  <!-- Nav -->
+  <!-- Nav (matches Solara) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
-      <button class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600" onclick="location.href=`solara.html?ws=${encodeURIComponent(getWorkspaceId()||'')}`">
+      <button class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600" onclick="location.href='solara.html'">
         <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3h14v2H3V3zm0 4h9v2H3V7zm0 4h14v2H3v-2zm0 4h9v2H3v-2z"/></svg>
         <span>Tasks</span>
       </button>
@@ -50,12 +52,7 @@
       </button>
     </div>
     <div class="flex items-center gap-3">
-      <span id="wsChip" class="hidden px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200 border border-indigo-200/50">Workspace</span>
-      <button id="refreshBtn" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 01-9.27 2.73l-1.46 1.46A7 7 0 0019 13c0-3.87-3.13-7-7-7z"/></svg>
-        Refresh
-      </button>
-      <button onclick="clearReports()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200" title="Clear extra blocks">
+      <button onclick="clearReports()" class="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200" title="Clear extra blocks">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m0 0A2.99 2.99 0 017 6h10a2.99 2.99 0 012.418 3H19v10a2 2 0 01-2 2H7a2 2 0 01-2-2V9h.582zM10 11v6m4-6v6"/></svg>
         Clear extras
       </button>
@@ -66,22 +63,14 @@
     </div>
   </nav>
 
-  <!-- Alerts -->
-  <div id="alert" class="hidden mx-6 mt-3 mb-0 p-3 rounded-xl text-sm"></div>
-
-  <!-- Missing workspace banner -->
-  <div id="wsMissing" class="hidden mx-6 mt-4 p-3 rounded-xl border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm">
-    No workspace selected. <button class="underline ml-1" onclick="location.href='workspace.html'">Go to workspace hub</button>.
-  </div>
-
-  <!-- Main -->
+  <!-- Main Content -->
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="report-area" class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Completion Rate -->
       <div class="bg-white dark:bg-gray-800 p-6 rounded-xl card">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-lg font-semibold">Completion Rate</h3>
-          <div class="w-6 h-6 rounded skeleton" id="crSkel"></div>
+          <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2 2 4-4m2 10h6a2 2 0 0 0 2-2v-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 8h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Percentage of completed tasks across all tabs.</p>
         <div class="text-4xl font-bold text-green-500 text-center" id="completionRate">--%</div>
@@ -91,7 +80,7 @@
       <div class="bg-white dark:bg-gray-800 p-6 rounded-xl card">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-lg font-semibold">Task Status</h3>
-          <div class="w-6 h-6 rounded skeleton" id="tsSkel"></div>
+          <svg class="h-6 w-6 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18M7 16v-4m4 4V8m4 8V5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Breakdown by current state (all tabs).</p>
         <ul class="space-y-2 text-sm font-medium">
@@ -107,7 +96,7 @@
   <!-- Sticky Footer -->
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3">
-      <span class="text-xs text-gray-500 dark:text-gray-400">Export a snapshot of the visible cards.</span>
+      <span class="text-sm text-gray-500 dark:text-gray-400"></span>
       <button onclick="exportReportsAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600" title="Export as PDF">
         <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 16l4-5h-3V4h-2v7H8l4 5zm-7 4h14v-2H5v2z"/></svg>
       </button>
@@ -116,93 +105,78 @@
   </div>
 
 <script>
-/************ CONFIG ************/
+/*************************
+ * CONFIG
+ *************************/
 const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev";
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
 
-/************ STATE ************/
+/**************
+ * STATE
+ **************/
 let sessionJWT = null;
-let authedUser = null; // {name:{...}, email_addresses:[{email_address}]}
-let tabData = {};
-let workspaceId = null;
+let authedUser = null;
+let tabData = JSON.parse(localStorage.getItem('solara-tabs') || '{}');
 
-/************ UTIL ************/
-const getCookie = (name) => {
-  const m = document.cookie.match(new RegExp('(?:^|; )'+name+'=([^;]+)')); return m?decodeURIComponent(m[1]):null;
-};
-const getJWT = () => localStorage.getItem('stytch_session_jwt') || getCookie('solara_session_jwt');
-const userEmail = () => authedUser?.email_addresses?.[0]?.email_address || '';
-const tabsKey = (ws) => `solara-tabs::${userEmail()||'anon'}::${ws||'__none__'}`;
-const setAlert = (kind, msg) => {
-  const el = document.getElementById('alert');
-  el.className = `mx-6 mt-3 mb-0 p-3 rounded-xl text-sm ${kind==='error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`;
-  el.textContent = msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'), 3500);
-};
+/*******************
+ * UTILITIES
+ *******************/
 function initialsFor(user){
-  const full=((user?.name?.first_name||'')+' '+(user?.name?.last_name||'')).trim();
-  const fromName=full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join(''); if(fromName) return fromName.toUpperCase();
-  const email=userEmail(); return email?email.slice(0,2).toUpperCase():'?';
+  const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
+  const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
+  if(fromName) return fromName.toUpperCase();
+  const email = user?.email_addresses?.[0]?.email_address || '?';
+  return email.slice(0,2).toUpperCase();
 }
 function displayNameFor(user){
-  const parts=[user?.name?.first_name,user?.name?.last_name].filter(Boolean); if(parts.length) return parts.join(' ');
-  return userEmail() || initialsFor(user);
+  const parts = [user?.name?.first_name, user?.name?.last_name].filter(Boolean);
+  if (parts.length) return parts.join(' ');
+  return user?.email_addresses?.[0]?.email_address || initialsFor(user);
+}
+
+/*******************
+ * AUTH
+ *******************/
+function requireReauth(){
+  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{}
+  location.replace('/sign-in.html');
+}
+function hydrateFromAuthCheckPayload(data){
+  const full = (data?.name||'').trim();
+  const parts = full ? full.split(/\s+/) : [];
+  const first = parts[0] || '';
+  const last  = parts.slice(1).join(' ') || '';
+  const email = data?.email || '';
+  return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
 function updateAuthUI(){
-  const avatar=document.getElementById('avatar'), nameEl=document.getElementById('userName'), emailEl=document.getElementById('userEmail');
+  const avatar = document.getElementById('avatar');
+  const nameEl = document.getElementById('userName');
+  const emailEl = document.getElementById('userEmail');
   const u = authedUser || { name:{}, email_addresses:[] };
   avatar.textContent = initialsFor(u);
   nameEl.textContent = displayNameFor(u) || 'User';
-  emailEl.textContent = userEmail();
+  emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
 }
 function wireAuthButtons(){
   document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden');
   document.addEventListener('click', (e)=>{
-    const m=document.getElementById('userMenu'), b=document.getElementById('userButton');
+    const m = document.getElementById('userMenu');
+    const b = document.getElementById('userButton');
     if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
   });
-  document.getElementById('signOutBtn').onclick = async ()=>{
-    try{ const jwt=getJWT(); if(jwt){ await fetch(apiUrl('logout'),{method:'POST', headers:{'Authorization':`Bearer ${jwt}`}}).catch(()=>{}); } }
-    finally{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); document.cookie='solara_session_jwt=; Path=/; Max-Age=0'; location.href='sign-in.html'; }
+  document.getElementById('signOutBtn').onclick = async () => {
+    try{ if(sessionJWT){ await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${sessionJWT}` } }).catch(()=>{}); } }
+    finally{ requireReauth(); }
   };
 }
-function getWorkspaceId(){
-  const u = new URL(location.href);
-  const ws = u.searchParams.get('ws') || localStorage.getItem('solara_last_ws');
-  if (ws) localStorage.setItem('solara_last_ws', ws);
-  return ws;
-}
-async function loadWorkspaceName(ws){
-  // Try local cache saved by workspace hub
-  try{
-    const cache = JSON.parse(localStorage.getItem('solara_ws_cache')||'[]');
-    const found = cache.find(w=>String(w.id)===String(ws));
-    if(found?.name){ setWsChip(found.name); return; }
-  }catch{}
-  // Fallback: fetch list and find
-  try{
-    const jwt = getJWT(); if(!jwt) return;
-    const res = await fetch(apiUrl('workspaces'), { headers:{'Authorization':`Bearer ${jwt}`}});
-    if(res.ok){ const data=await res.json(); const hit=(data.workspaces||[]).find(w=>String(w.id)===String(ws)); if(hit?.name){ setWsChip(hit.name); } }
-  }catch{}
-}
-function setWsChip(name){
-  const chip=document.getElementById('wsChip');
-  chip.textContent = `Workspace: ${name}`; chip.classList.remove('hidden');
-}
-
-/************ AUTH ************/
-function hydrateFromAuthCheckPayload(data){
-  const full=(data?.name||'').trim(); const parts=full?full.split(/\s+/):[];
-  const first=parts[0]||''; const last=parts.slice(1).join(' ')||''; const email=data?.email||'';
-  return { name:{ first_name:first, last_name:last }, email_addresses: email? [{email_address:email}] : [] };
-}
 async function verifySessionAndHydrate(){
-  sessionJWT = getJWT();
-  authedUser = JSON.parse(localStorage.getItem('stytch_user')||'null');
+  sessionJWT = localStorage.getItem('stytch_session_jwt');
+  authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
   if(!sessionJWT) return false;
   updateAuthUI();
   try{
-    const res = await fetch(apiUrl('auth/check'), { headers:{'Authorization':`Bearer ${sessionJWT}`}});
+    const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
     if(!res.ok) return false;
     const data = await res.json();
     if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
@@ -211,46 +185,36 @@ async function verifySessionAndHydrate(){
     }
     updateAuthUI();
     return true;
-  }catch{ return !!authedUser; }
+  }catch(err){ return !!authedUser; }
 }
 
-/************ CLOUD ************/
+/*******************
+ * CLOUD LOAD
+ *******************/
 async function loadTabsFromCloud(){
-  if(!sessionJWT || !workspaceId) return false;
+  if(!sessionJWT) return false;
   try{
-    const res = await fetch(apiUrl(`tasks?workspace_id=${encodeURIComponent(workspaceId)}`), { headers:{'Authorization':`Bearer ${sessionJWT}`}});
-    if(res.status===401) return false;
+    const res = await fetch(apiUrl('tasks'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
+    if(res.status === 401) return false;
     if(res.ok){
       const data = await res.json();
-      if (data && data.tabs){
-        tabData = data.tabs || {};
-        localStorage.setItem(tabsKey(workspaceId), JSON.stringify(tabData));
-        paintDefaultCards(true);
-        setAlert('ok','Reports updated from cloud.');
-        return true;
-      }
-    }else{
-      const txt = await res.text();
-      setAlert('error', `Cloud load failed: ${txt}`);
+      if(data && data.tabs){ tabData = data.tabs; localStorage.setItem('solara-tabs', JSON.stringify(tabData)); return true; }
     }
-  }catch(err){ setAlert('error', `Cloud load error: ${err.message}`); }
+  }catch(err){}
   return false;
 }
 
-/************ LOCAL ************/
-function loadTabsFromLocal(){
-  try{
-    const raw = localStorage.getItem(tabsKey(workspaceId));
-    tabData = raw ? JSON.parse(raw) : {};
-  }catch{ tabData = {}; }
-}
-
-/************ METRICS ************/
+/*******************
+ * REPORTS DATA
+ *******************/
 function getAllTasks(){
-  const out=[]; const tabs=tabData||{};
-  Object.keys(tabs).forEach(tabName=>{
-    ['todo','inprogress','done'].forEach(status=>{
-      (tabs[tabName]?.[status]||[]).forEach(task=> out.push({...task, status, tab:tabName}));
+  const out = [];
+  const tabs = tabData || {};
+  Object.keys(tabs).forEach(tabName => {
+    ['todo','inprogress','done'].forEach(status => {
+      (tabs[tabName]?.[status]||[]).forEach(task => {
+        out.push({ ...task, status, tab: tabName });
+      });
     });
   });
   return out;
@@ -260,89 +224,82 @@ function computeMetrics(){
   const now = new Date();
   let total=tasks.length, todo=0, inprogress=0, done=0, overdue=0;
   const priority = { High:0, Medium:0, Low:0 };
-  let ageSum=0;
-  tasks.forEach(t=>{
-    if(t.status==='todo') todo++; else if(t.status==='inprogress') inprogress++; else if(t.status==='done') done++;
-    const p=t.priority||'Medium'; if(priority[p]!==undefined) priority[p]++;
-    if(t.status!=='done' && t.dueDate){ const d=new Date(t.dueDate); if(!isNaN(d) && d<now) overdue++; }
-    const m=String(t.id||'').match(/task-(\d+)/); if(m){ const created=new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum+=(now-created)/(1000*60*60*24); }
+  let ageSum = 0;
+  tasks.forEach(t => {
+    if (t.status==='todo') todo++; else if (t.status==='inprogress') inprogress++; else if (t.status==='done') done++;
+    const p = t.priority || 'Medium'; if(priority[p]!==undefined) priority[p]++;
+    if (t.status!=='done' && t.dueDate){ const d = new Date(t.dueDate); if(!isNaN(d) && d < now) overdue++; }
+    const m = String(t.id||'').match(/task-(\d+)/); if(m){ const created = new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum += (now - created)/(1000*60*60*24); }
   });
-  const completionRate = total? Math.round((done/total)*100):0;
-  const avgAge = total? Math.round(ageSum/total):0;
+  const completionRate = total ? Math.round((done/total)*100) : 0;
+  const avgAge = total ? Math.round(ageSum/total) : 0;
   return { total, todo, inprogress, done, completionRate, overdue, avgAge, priority };
 }
-function paintDefaultCards(fromCloud=false){
+
+function paintDefaultCards(){
   const m = computeMetrics();
   document.getElementById('todoCount').textContent = m.todo;
   document.getElementById('inprogressCount').textContent = m.inprogress;
   document.getElementById('doneCount').textContent = m.done;
   document.getElementById('totalCount').textContent = m.total;
   document.getElementById('completionRate').textContent = m.completionRate + '%';
-  document.getElementById('crSkel').classList.add('hidden');
-  document.getElementById('tsSkel').classList.add('hidden');
-
-  // Extended blocks
-  document.querySelectorAll('#report-area .card').forEach(card=>{
+  document.querySelectorAll('#report-area .card').forEach(card => {
     const title = card.querySelector('h3')?.textContent?.trim();
-    if(title==='Overdue Tasks'){ const kpi=card.querySelector('[data-kpi]'); if(kpi) kpi.textContent=m.overdue; }
-    else if(title==='Avg Task Age'){ const kpi=card.querySelector('[data-kpi]'); if(kpi) kpi.textContent=m.avgAge+'d'; }
-    else if(title==='Priority Distribution'){
+    if(title==='Overdue Tasks'){
+      const kpi = card.querySelector('[data-kpi]'); if(kpi) kpi.textContent = m.overdue;
+    }else if(title==='Avg Task Age'){
+      const kpi = card.querySelector('[data-kpi]'); if(kpi) kpi.textContent = m.avgAge + 'd';
+    }else if(title==='Priority Distribution'){
       const spans = card.querySelectorAll('[data-pri]');
-      if(spans.length>=3){ spans[0].textContent=m.priority.High; spans[1].textContent=m.priority.Medium; spans[2].textContent=m.priority.Low; }
+      if(spans.length>=3){ spans[0].textContent = m.priority.High; spans[1].textContent = m.priority.Medium; spans[2].textContent = m.priority.Low; }
     }
   });
 }
 
-/************ REPORT BLOCKS ************/
+/*******************
+ * REPORT BLOCKS
+ *******************/
 const predefinedReports = [
   { title:'Overdue Tasks', desc:'Tasks past their due date across tabs.', icon:`<svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`, body:`<div class="text-2xl font-bold text-red-500 text-center" data-kpi>--</div>` },
   { title:'Avg Task Age', desc:'Average duration since task creation.', icon:`<svg class="h-6 w-6 text-yellow-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`, body:`<div class="text-2xl font-bold text-yellow-500 text-center" data-kpi>--</div>` },
   { title:'Priority Distribution', desc:'Tasks grouped by priority across all tabs.', icon:`<svg class="h-6 w-6 text-purple-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`, body:`<ul class="text-sm font-medium space-y-1 text-gray-800 dark:text-gray-200"><li class="flex justify-between"><span>High</span><span data-pri>--</span></li><li class="flex justify-between"><span>Medium</span><span data-pri>--</span></li><li class="flex justify-between"><span>Low</span><span data-pri>--</span></li></ul>` }
 ];
+
 function addReportBlock(){
-  const area=document.getElementById('report-area');
-  const existing=Array.from(area.children).map(el=>el.querySelector('h3')?.textContent?.trim());
-  const next=predefinedReports.find(r=>!existing.includes(r.title));
+  const area = document.getElementById('report-area');
+  const existing = Array.from(area.children).map(el => el.querySelector('h3')?.textContent?.trim());
+  const next = predefinedReports.find(r => !existing.includes(r.title));
   if(!next){ alert('All predefined reports are already added.'); return; }
-  const card=document.createElement('div');
-  card.className='bg-white dark:bg-gray-800 p-6 rounded-xl card';
+  const card = document.createElement('div');
+  card.className = 'bg-white dark:bg-gray-800 p-6 rounded-xl card';
   card.innerHTML = `<div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold">${next.title}</h3>${next.icon}</div><p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${next.desc}</p>${next.body}`;
   area.appendChild(card);
   paintDefaultCards();
 }
 function clearReports(){
-  const area=document.getElementById('report-area');
+  const area = document.getElementById('report-area');
   while(area.children.length>2){ area.removeChild(area.lastElementChild); }
 }
 
-/************ EXPORT ************/
+/*******************
+ * EXPORT
+ *******************/
 function exportReportsAsPDF(){
-  const element=document.getElementById('report-area'); if(!element) return alert('No report area found.');
-  html2pdf().set({ margin:.5, filename:'Solara-Report.pdf', image:{type:'jpeg',quality:.98}, html2canvas:{scale:2}, jsPDF:{unit:'in', format:'letter', orientation:'portrait'} }).from(element).save();
+  const element = document.getElementById('report-area');
+  if(!element) return alert('No report area found.');
+  html2pdf().set({ margin:.5, filename:'Solara-Report.pdf', image:{ type:'jpeg', quality:.98 }, html2canvas:{ scale:2 }, jsPDF:{ unit:'in', format:'letter', orientation:'portrait' } }).from(element).save();
 }
 
-/************ BOOT ************/
-document.getElementById('refreshBtn').addEventListener('click', ()=> loadTabsFromCloud());
-window.addEventListener('DOMContentLoaded', async ()=>{
-  // Auth
+/*******************
+ * BOOT
+ *******************/
+window.addEventListener('DOMContentLoaded', async () => {
   const ok = await verifySessionAndHydrate();
-  if(!ok){ location.href='sign-in.html'; return; }
+  if(!ok) return requireReauth();
   wireAuthButtons();
-
-  // Workspace guard
-  workspaceId = getWorkspaceId();
-  if(!workspaceId){
-    document.getElementById('wsMissing').classList.remove('hidden');
-    return; // Don’t proceed without a workspace
-  }
-  loadWorkspaceName(workspaceId);
-
-  // Local-first paint
-  loadTabsFromLocal();
+  const loaded = await loadTabsFromCloud();
+  if(loaded){ try{ localStorage.setItem('solara_last_sync', Date.now()); }catch{} }
   paintDefaultCards();
-
-  // Cloud refresh (non-blocking)
-  await loadTabsFromCloud();
 });
 </script>
 </body>
