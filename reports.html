@@ -13,15 +13,16 @@
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
 
-  <!-- Header (user menu only) -->
+  <!-- Header (icon left, Solara title, subtitle) -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div class="flex items-start gap-3">
-      <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
-      <!-- Indigo icon linking back to workspace hub -->
-      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-6 h-6 rounded-md bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
+      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
       </a>
-      <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
+      </div>
     </div>
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
@@ -39,7 +40,7 @@
     </div>
   </header>
 
-  <!-- Nav (matches Solara) -->
+  <!-- Nav (matches Solara): left = section tabs; right = actions -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600" onclick="location.href='solara.html'">
@@ -63,7 +64,7 @@
     </div>
   </nav>
 
-  <!-- Main Content -->
+  <!-- Main Content (same width rhythm as Solara: p-6 full-width) -->
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="report-area" class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Completion Rate -->
@@ -93,7 +94,7 @@
     </div>
   </main>
 
-  <!-- Sticky Footer -->
+  <!-- Sticky Footer (export lives here) -->
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3">
       <span class="text-sm text-gray-500 dark:text-gray-400"></span>
@@ -106,20 +107,23 @@
 
 <script>
 /*************************
- * CONFIG
+ *  CONFIG               *
  *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev";
+const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // same as Solara
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+const params = new URLSearchParams(location.search);
+const WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
+if (WS) try{ localStorage.setItem('solara_ws', WS); }catch{}
 
 /**************
- * STATE
+ *  STATE     *
  **************/
 let sessionJWT = null;
 let authedUser = null;
 let tabData = JSON.parse(localStorage.getItem('solara-tabs') || '{}');
 
 /*******************
- * UTILITIES
+ *  UTILITIES       *
  *******************/
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
@@ -135,7 +139,7 @@ function displayNameFor(user){
 }
 
 /*******************
- * AUTH
+ *  AUTH             *
  *******************/
 function requireReauth(){
   try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{}
@@ -174,9 +178,12 @@ async function verifySessionAndHydrate(){
   sessionJWT = localStorage.getItem('stytch_session_jwt');
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
   if(!sessionJWT) return false;
-  updateAuthUI();
+  updateAuthUI(); // draw from cache immediately
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
+    if(res.status === 500){
+      try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) return false; }catch{}
+    }
     if(!res.ok) return false;
     const data = await res.json();
     if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
@@ -189,23 +196,24 @@ async function verifySessionAndHydrate(){
 }
 
 /*******************
- * CLOUD LOAD
+ *  CLOUD LOAD       *
  *******************/
 async function loadTabsFromCloud(){
   if(!sessionJWT) return false;
   try{
-    const res = await fetch(apiUrl('tasks'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
+    const url = apiUrl('tasks' + (WS ? `?ws=${encodeURIComponent(WS)}` : ''));
+    const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) } });
     if(res.status === 401) return false;
     if(res.ok){
       const data = await res.json();
-      if(data && data.tabs){ tabData = data.tabs; localStorage.setItem('solara-tabs', JSON.stringify(tabData)); return true; }
+      if(data && data.tabs){ tabData = data.tabs; localStorage.setItem('solara-tabs', JSON.stringify(tabData));  return true; }
     }
-  }catch(err){}
+  }catch(err){ /* ignore */ }
   return false;
 }
 
 /*******************
- * REPORTS DATA
+ *  REPORTS DATA     *
  *******************/
 function getAllTasks(){
   const out = [];
@@ -243,6 +251,7 @@ function paintDefaultCards(){
   document.getElementById('doneCount').textContent = m.done;
   document.getElementById('totalCount').textContent = m.total;
   document.getElementById('completionRate').textContent = m.completionRate + '%';
+  // Update extended blocks
   document.querySelectorAll('#report-area .card').forEach(card => {
     const title = card.querySelector('h3')?.textContent?.trim();
     if(title==='Overdue Tasks'){
@@ -257,7 +266,7 @@ function paintDefaultCards(){
 }
 
 /*******************
- * REPORT BLOCKS
+ *  REPORT BLOCKS    *
  *******************/
 const predefinedReports = [
   { title:'Overdue Tasks', desc:'Tasks past their due date across tabs.', icon:`<svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`, body:`<div class="text-2xl font-bold text-red-500 text-center" data-kpi>--</div>` },
@@ -278,11 +287,12 @@ function addReportBlock(){
 }
 function clearReports(){
   const area = document.getElementById('report-area');
+  // Keep the two default cards at the top
   while(area.children.length>2){ area.removeChild(area.lastElementChild); }
 }
 
 /*******************
- * EXPORT
+ *  EXPORT           *
  *******************/
 function exportReportsAsPDF(){
   const element = document.getElementById('report-area');
@@ -291,14 +301,19 @@ function exportReportsAsPDF(){
 }
 
 /*******************
- * BOOT
+ *  BOOT             *
  *******************/
 window.addEventListener('DOMContentLoaded', async () => {
+  // Auth required
   const ok = await verifySessionAndHydrate();
   if(!ok) return requireReauth();
   wireAuthButtons();
+
+  // Cloud pull (optional, workspace-aware)
   const loaded = await loadTabsFromCloud();
   if(loaded){ try{ localStorage.setItem('solara_last_sync', Date.now()); }catch{} }
+
+  // Paint metrics
   paintDefaultCards();
 });
 </script>
