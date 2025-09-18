@@ -9,21 +9,30 @@
   <style>
     .card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)}
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
+    .sublabel{letter-spacing:.01em}
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
 
-  <!-- Header (icon left, Solara title, subtitle) -->
-  <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+  <!-- Missing WS banner (shown only if ws param is absent) -->
+  <div id="wsBanner" class="hidden bg-amber-50 text-amber-900 border-b border-amber-200 px-6 py-2 text-sm">
+    No workspace selected. <a class="underline font-medium" href="workspace.html">Go to Workspaces</a>
+  </div>
+
+  <!-- Header (icon far-left → link to hub; title + sublabel stacked) -->
+  <header class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div class="flex items-start gap-3">
-      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
+      <a href="workspace.html" class="mt-1 inline-flex w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 items-center justify-center" title="Workspaces">
+        <!-- Indigo diamond-ish icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4zm0 2.3L7 7.5v8.9l5 2.8 5-2.8V7.5l-5-2.2z"/></svg>
       </a>
       <div>
-        <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
+        <h1 class="text-3xl font-bold tracking-tight leading-none">Solara</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 sublabel">Part of the ZLG Product Suite</p>
       </div>
     </div>
+
+    <!-- Signed-in user (name → email → initials). Visible by default; redirected if unauth. -->
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
         <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
@@ -43,8 +52,8 @@
   <!-- Nav (matches Solara): left = section tabs; right = actions -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
-      <button class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600" onclick="location.href='solara.html'">
-        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3h14v2H3V3zm0 4h9v2H3V7zm0 4h14v2H3v-2zm0 4h9v2H3v-2z"/></svg>
+      <button onclick="goTasks()" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3h14v2H3V3zm0 4h9v2H3V7zm0 4h14v2H3v-2zm0 4h9v2H3v-2z"/></svg>
         <span>Tasks</span>
       </button>
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
@@ -94,7 +103,7 @@
     </div>
   </main>
 
-  <!-- Sticky Footer (export lives here) -->
+  <!-- Sticky Footer (export lives here, like Solara) -->
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3">
       <span class="text-sm text-gray-500 dark:text-gray-400"></span>
@@ -109,22 +118,35 @@
 /*************************
  *  CONFIG               *
  *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // same as Solara
+const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // same Worker as Solara
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
 const params = new URLSearchParams(location.search);
-const WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
-if (WS) try{ localStorage.setItem('solara_ws', WS); }catch{}
+const WORKSPACE_ID = params.get('ws') || localStorage.getItem('solara_last_ws') || '';
 
 /**************
  *  STATE     *
  **************/
 let sessionJWT = null;
 let authedUser = null;
-let tabData = JSON.parse(localStorage.getItem('solara-tabs') || '{}');
+let currentUserId = null; // from /auth/check
+let tabData = {}; // hydrated from storage + cloud
 
 /*******************
  *  UTILITIES       *
  *******************/
+const getSessionJWT = () => {
+  const m = document.cookie.match(/(?:^|; )(?:stytch_session_jwt|solara_session_jwt)=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : (localStorage.getItem('stytch_session_jwt') || localStorage.getItem('solara_session_jwt') || null);
+};
+function storageKey(){
+  const uid = currentUserId || 'anon';
+  const wid = WORKSPACE_ID || 'local';
+  return `solara-tabs::${uid}::${wid}`;
+}
+function loadTabsFromStorage(){
+  try{ const raw = localStorage.getItem(storageKey()); return raw ? JSON.parse(raw) : {}; }catch{ return {}; }
+}
+function saveTabsToStorage(){ try{ localStorage.setItem(storageKey(), JSON.stringify(tabData)); }catch{} }
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
   const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
@@ -142,7 +164,7 @@ function displayNameFor(user){
  *  AUTH             *
  *******************/
 function requireReauth(){
-  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{}
+  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); localStorage.removeItem('solara_session_jwt'); }catch{}
   location.replace('/sign-in.html');
 }
 function hydrateFromAuthCheckPayload(data){
@@ -151,6 +173,7 @@ function hydrateFromAuthCheckPayload(data){
   const first = parts[0] || '';
   const last  = parts.slice(1).join(' ') || '';
   const email = data?.email || '';
+  currentUserId = data?.user_id || currentUserId;
   return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
 function updateAuthUI(){
@@ -175,40 +198,43 @@ function wireAuthButtons(){
   };
 }
 async function verifySessionAndHydrate(){
-  sessionJWT = localStorage.getItem('stytch_session_jwt');
+  sessionJWT = getSessionJWT();
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
-  if(!sessionJWT) return false;
-  updateAuthUI(); // draw from cache immediately
+  if(!sessionJWT) return false; // redirect to sign-in
+
+  // Cached UI first
+  updateAuthUI();
+
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
-    if(res.status === 500){
-      try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) return false; }catch{}
-    }
-    if(!res.ok) return false;
+    if(!res.ok){ return false; }
     const data = await res.json();
+    const fresh = hydrateFromAuthCheckPayload(data);
     if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
-      authedUser = hydrateFromAuthCheckPayload(data);
-      try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
+      authedUser = fresh; localStorage.setItem('stytch_user', JSON.stringify(authedUser));
+    } else {
+      if (fresh.email_addresses?.[0]?.email_address && !authedUser.email_addresses?.length){ authedUser.email_addresses = fresh.email_addresses; }
+      if ((fresh.name?.first_name||fresh.name?.last_name) && !(authedUser.name?.first_name||authedUser.name?.last_name)) authedUser.name = fresh.name;
+      localStorage.setItem('stytch_user', JSON.stringify(authedUser));
     }
     updateAuthUI();
     return true;
-  }catch(err){ return !!authedUser; }
+  }catch(err){
+    return !!authedUser;
+  }
 }
 
 /*******************
  *  CLOUD LOAD       *
  *******************/
 async function loadTabsFromCloud(){
-  if(!sessionJWT) return false;
+  if(!sessionJWT || !WORKSPACE_ID) return false;
   try{
-    const url = apiUrl('tasks' + (WS ? `?ws=${encodeURIComponent(WS)}` : ''));
-    const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) } });
+    const url = apiUrl('tasks') + `?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`;
+    const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
     if(res.status === 401) return false;
-    if(res.ok){
-      const data = await res.json();
-      if(data && data.tabs){ tabData = data.tabs; localStorage.setItem('solara-tabs', JSON.stringify(tabData));  return true; }
-    }
-  }catch(err){ /* ignore */ }
+    if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; } }
+  }catch(err){ /* ignore for reports */ }
   return false;
 }
 
@@ -237,14 +263,15 @@ function computeMetrics(){
     if (t.status==='todo') todo++; else if (t.status==='inprogress') inprogress++; else if (t.status==='done') done++;
     const p = t.priority || 'Medium'; if(priority[p]!==undefined) priority[p]++;
     if (t.status!=='done' && t.dueDate){ const d = new Date(t.dueDate); if(!isNaN(d) && d < now) overdue++; }
+    // derive age from id timestamp (task-<millis>) when present
     const m = String(t.id||'').match(/task-(\d+)/); if(m){ const created = new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum += (now - created)/(1000*60*60*24); }
   });
   const completionRate = total ? Math.round((done/total)*100) : 0;
-  const avgAge = total ? Math.round(ageSum/total) : 0;
+  const avgAge = total ? Math.round(ageSum/Math.max(total,1)) : 0;
   return { total, todo, inprogress, done, completionRate, overdue, avgAge, priority };
 }
 
-function paintDefaultCards(){
+function paintCards(){
   const m = computeMetrics();
   document.getElementById('todoCount').textContent = m.todo;
   document.getElementById('inprogressCount').textContent = m.inprogress;
@@ -283,12 +310,20 @@ function addReportBlock(){
   card.className = 'bg-white dark:bg-gray-800 p-6 rounded-xl card';
   card.innerHTML = `<div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold">${next.title}</h3>${next.icon}</div><p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${next.desc}</p>${next.body}`;
   area.appendChild(card);
-  paintDefaultCards();
+  paintCards();
 }
 function clearReports(){
   const area = document.getElementById('report-area');
   // Keep the two default cards at the top
   while(area.children.length>2){ area.removeChild(area.lastElementChild); }
+}
+
+/*******************
+ *  NAV              *
+ *******************/
+function goTasks(){
+  const ws = WORKSPACE_ID || localStorage.getItem('solara_last_ws') || '';
+  location.href = ws ? `solara.html?ws=${encodeURIComponent(ws)}` : 'solara.html';
 }
 
 /*******************
@@ -304,17 +339,21 @@ function exportReportsAsPDF(){
  *  BOOT             *
  *******************/
 window.addEventListener('DOMContentLoaded', async () => {
+  // Workspace check
+  if(!WORKSPACE_ID){ document.getElementById('wsBanner').classList.remove('hidden'); }
+
   // Auth required
   const ok = await verifySessionAndHydrate();
   if(!ok) return requireReauth();
   wireAuthButtons();
 
-  // Cloud pull (optional, workspace-aware)
-  const loaded = await loadTabsFromCloud();
-  if(loaded){ try{ localStorage.setItem('solara_last_sync', Date.now()); }catch{} }
+  // Load local first (namespaced by user+workspace) to avoid cross-user leakage
+  tabData = loadTabsFromStorage();
+  paintCards(); // optimistic UI
 
-  // Paint metrics
-  paintDefaultCards();
+  // Cloud pull (optional, overrides local if present)
+  const loaded = await loadTabsFromCloud();
+  if(loaded){ try{ localStorage.setItem('solara_last_sync', Date.now()); }catch{} paintCards(); }
 });
 </script>
 </body>
