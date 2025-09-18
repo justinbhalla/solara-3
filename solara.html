@@ -12,10 +12,12 @@
     .drag-over { background-color: rgba(99,102,241,.1); outline: 2px dashed #6366f1; outline-offset: -2px; }
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
     .editable { outline: none; min-height: 1.5rem; }
+    .skeleton { background: linear-gradient(90deg, rgba(0,0,0,.05), rgba(0,0,0,.12), rgba(0,0,0,.05)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-  <!-- Header: icon at far left → Solara title + subtitle; icon links back to workspace hub -->
+  <!-- Header: icon far left → title + subtitle; icon links to workspace hub -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div class="flex items-start gap-3">
       <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
@@ -44,6 +46,9 @@
     </div>
   </header>
 
+  <!-- Top alert for workspace or API issues -->
+  <div id="alert" class="hidden mx-6 mt-3 mb-0 p-3 rounded-xl text-sm"></div>
+
   <!-- Nav: left = section tabs, right = actions (Trash + Plus) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
@@ -67,14 +72,19 @@
   <!-- Main Board -->
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div id="todo" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
+      <!-- Skeletons to avoid empty flashes -->
+      <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
         <h2 class="text-lg font-semibold mb-2">To Do</h2>
+        <div class="skeleton h-6 rounded mb-2"></div>
+        <div class="skeleton h-6 rounded w-2/3"></div>
       </div>
-      <div id="inprogress" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress">
+      <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress">
         <h2 class="text-lg font-semibold mb-2">In Progress</h2>
+        <div class="skeleton h-6 rounded mb-2"></div>
       </div>
-      <div id="done" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done">
+      <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done">
         <h2 class="text-lg font-semibold mb-2">Done</h2>
+        <div class="skeleton h-6 rounded w-1/2"></div>
       </div>
     </div>
   </main>
@@ -97,25 +107,31 @@
 
 <script>
 /*************************
- *  CONFIG               *
+ *  CONFIG
  *************************/
 const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // Worker API
-const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+const apiBase = API_BASE.replace(/\/+$/, '');
 const params = new URLSearchParams(location.search);
 let WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
 if (WS) try{ localStorage.setItem('solara_ws', WS); }catch{}
 
-/**************
- *  STATE     *
- **************/
-let activeTab = null;
-let tabData = JSON.parse(localStorage.getItem('solara-tabs')) || {}; // { tabName: { todo:[], inprogress:[], done:[] } }
+/*************************
+ *  STATE (namespaced)
+ *************************/
 let sessionJWT = null;
 let authedUser = null; // { name:{first_name,last_name}, email_addresses:[{email_address}] }
+let activeTab = null;
+let tabData = {}; // loaded per user+workspace
 
-/*******************
- *  UTILITIES       *
- *******************/
+function storageKey(){
+  const uid = (authedUser?.email_addresses?.[0]?.email_address || 'anon').toLowerCase();
+  const ws = WS || 'noworkspace';
+  return `solara-tabs:${uid}:${ws}`;
+}
+
+/*************************
+ *  UTILITIES
+ *************************/
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
@@ -129,45 +145,28 @@ function displayNameFor(user){
   if (parts.length) return parts.join(' ');
   return user?.email_addresses?.[0]?.email_address || initialsFor(user);
 }
-function saveTabsToStorage(){ localStorage.setItem('solara-tabs', JSON.stringify(tabData)); }
+function setAlert(kind, msg){ const el=document.getElementById('alert'); el.className=`mx-6 mt-3 mb-0 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`; el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'), 3500); }
 
-/*******************
- *  CLOUD SYNC       *
- *******************/
-const saveTabsToCloud = debounce(async ()=>{
-  if(!sessionJWT || !WS) return;
-  try{
-    const res = await fetch(apiUrl('tasks' + (WS?`?ws=${encodeURIComponent(WS)}`:'')), {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) },
-      body: JSON.stringify({ ws: WS, tabs: tabData })
-    });
-    if(res.status === 401){ console.warn('Cloud save unauthorized'); return; }
-    if(!res.ok) console.warn('Cloud save failed', await res.text());
-  }catch(err){ console.warn('Cloud save error', err); }
-}, 450);
-async function loadTabsFromCloud(){
-  if(!sessionJWT || !WS) return false;
-  try{
-    const res = await fetch(apiUrl('tasks' + (WS?`?ws=${encodeURIComponent(WS)}`:'')), { headers:{ 'Authorization':`Bearer ${sessionJWT}`, ...(WS?{'X-Workspace':WS}:{}) } });
-    if(res.status === 500){
-      try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) return false; }catch{}
-    }
-    if(res.status === 401) return false;
-    if(res.ok){
-      const data = await res.json();
-      if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; }
-    }
-  }catch(err){ console.warn('Cloud load error', err); }
-  return false;
+/*************************
+ *  FETCH WRAPPER
+ *************************/
+async function api(path, opts={}, { includeWS=true }={}){
+  const headers = { 'Content-Type':'application/json', ...(opts.headers||{}) };
+  if (sessionJWT) headers['Authorization'] = `Bearer ${sessionJWT}`;
+  if (includeWS && WS) headers['X-Workspace'] = WS;
+  const url = includeWS && WS ? `${apiBase}${path}${path.includes('?')?'&':'?'}ws=${encodeURIComponent(WS)}` : `${apiBase}${path}`;
+  const res = await fetch(url, { ...opts, headers, cache:'no-store' });
+  if (res.status === 401) { throw new Error('unauthorized'); }
+  if (res.status === 500) { try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) throw new Error('unauthorized'); }catch{} }
+  return res;
 }
 
-/*******************
- *  AUTH             *
- *******************/
+/*************************
+ *  AUTH
+ *************************/
 function requireReauth(){
   try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{}
-  location.replace('/sign-in.html');
+  location.replace('sign-in.html');
 }
 function hydrateFromAuthCheckPayload(data){
   const full = (data?.name||'').trim();
@@ -194,38 +193,28 @@ function wireAuthButtons(){
     if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
   });
   document.getElementById('signOutBtn').onclick = async () => {
-    try{ if(sessionJWT){ await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${sessionJWT}` } }).catch(()=>{}); } }
+    try{ if(sessionJWT){ await api('/logout', { method:'POST' }, { includeWS:false }).catch(()=>{}); } }
     finally{ requireReauth(); }
   };
   document.getElementById('addUserBtn').onclick = async () => {
     const email = prompt('Invite a user by email:');
     if(!email) return;
-    if(!sessionJWT) return requireReauth();
-    try{
-      const res = await fetch(apiUrl('shares'), { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` }, body: JSON.stringify({ email }) });
-      if(res.ok) alert('Invitation sent.'); else alert('Invite failed: ' + (await res.text()));
-    }catch(err){ alert('Invite error: ' + err.message); }
+    try{ const r = await api('/shares', { method:'POST', body: JSON.stringify({ email }) }); if(r.ok) alert('Invitation sent.'); else alert('Invite failed: '+await r.text()); }catch(err){ alert('Invite error: '+err.message); }
   };
 }
 async function verifySessionAndHydrate(){
   sessionJWT = localStorage.getItem('stytch_session_jwt');
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
-  if(!sessionJWT) return false; // redirect to sign-in
-
-  updateAuthUI(); // render icon immediately (cached)
-
+  if(!sessionJWT) return false;
+  updateAuthUI();
   try{
-    const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
-    if(res.status === 500){
-      try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) return false; }catch{}
-    }
-    if(!res.ok){ return false; }
+    const res = await api('/auth/check', {}, { includeWS:false });
+    if(!res.ok) return false;
     const data = await res.json();
     if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
       authedUser = hydrateFromAuthCheckPayload(data);
       try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
     } else {
-      // Refresh missing pieces if server provides them
       const fresh = hydrateFromAuthCheckPayload(data);
       if (fresh.email_addresses?.[0]?.email_address && !authedUser.email_addresses?.length){ authedUser.email_addresses = fresh.email_addresses; }
       if ((fresh.name?.first_name||fresh.name?.last_name) && !(authedUser.name?.first_name||authedUser.name?.last_name)) authedUser.name = fresh.name;
@@ -233,14 +222,41 @@ async function verifySessionAndHydrate(){
     }
     updateAuthUI();
     return true;
-  }catch(err){
-    return !!authedUser; // tolerate network hiccup
-  }
+  }catch(err){ return !!authedUser; }
 }
 
-/*******************
- *  TABS             *
- *******************/
+/*************************
+ *  LOCAL STORAGE
+ *************************/
+function loadFromLocal(){
+  try{ const raw = localStorage.getItem(storageKey()); if(raw){ tabData = JSON.parse(raw)||{}; } else { tabData = {}; } }catch{ tabData = {}; }
+}
+function saveToLocal(){ try{ localStorage.setItem(storageKey(), JSON.stringify(tabData)); }catch{} }
+
+/*************************
+ *  CLOUD SYNC (workspace-aware)
+ *************************/
+const saveTabsToCloud = debounce(async ()=>{
+  if(!sessionJWT || !WS) return;
+  try{
+    const res = await api('/tasks', { method:'POST', body: JSON.stringify({ ws: WS, tabs: tabData }) });
+    if(!res.ok){ console.warn('Cloud save failed', await res.text()); }
+  }catch(err){ console.warn('Cloud save error', err); }
+}, 450);
+
+async function loadTabsFromCloud(){
+  if(!sessionJWT || !WS) return false;
+  try{
+    const res = await api('/tasks', {}, { includeWS:true });
+    if(res.status === 404){ return false; }
+    if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveToLocal(); return true; } }
+  }catch(err){ console.warn('Cloud load error', err); }
+  return false;
+}
+
+/*************************
+ *  TABS UI
+ *************************/
 function renderTabs(){
   const tabsContainer = document.getElementById('tabs');
   tabsContainer.innerHTML = '';
@@ -258,7 +274,7 @@ function renderTabs(){
       tabData[newName] = tabData[name];
       delete tabData[name];
       if (activeTab === name) activeTab = newName;
-      saveTabsToStorage();
+      saveToLocal();
       renderTabs();
       switchTab(activeTab);
       saveTabsToCloud();
@@ -268,12 +284,12 @@ function renderTabs(){
   });
 }
 function promptNewTab(){ const name = prompt('Enter tab name:'); if(!name || !name.trim()) return; addTab(name.trim()); }
-function addTab(name){ if(tabData[name]) return switchTab(name); tabData[name] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(); renderTabs(); switchTab(name); saveTabsToCloud(); }
-function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabData[name]; if(activeTab===name) activeTab = Object.keys(tabData)[0]||null; saveTabsToStorage(); renderTabs(); renderBoard(); saveTabsToCloud(); }
+function addTab(name){ if(tabData[name]) return switchTab(name); tabData[name] = { todo:[], inprogress:[], done:[] }; saveToLocal(); renderTabs(); switchTab(name); saveTabsToCloud(); }
+function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabData[name]; if(activeTab===name) activeTab = Object.keys(tabData)[0]||null; saveToLocal(); renderTabs(); renderBoard(); saveTabsToCloud(); }
 
-/*******************
- *  BOARD LOGIC      *
- *******************/
+/*************************
+ *  BOARD LOGIC
+ *************************/
 function switchTab(tabName){ if(!tabData[tabName]) return; activeTab = tabName; document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30')); const activeBtn = Array.from(document.querySelectorAll('.tab-button')).find(b => b.dataset.tab===tabName); if(activeBtn){ activeBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } renderBoard(); }
 
 function ensureAtLeastOneTask(){ const cols = tabData[activeTab]; if(!cols) return; if((cols.todo?.length||0)+(cols.inprogress?.length||0)+(cols.done?.length||0)===0){ const id = `task-${Date.now()}`; cols.todo.push({ id, content:'', dueDate:'', priority:'Medium' }); } }
@@ -282,7 +298,8 @@ function renderBoard(){
   const columns = ['todo','inprogress','done'];
   // prep lanes DnD
   columns.forEach(col => {
-    const colEl = document.getElementById(col);
+    const colEl = document.getElementById(col) || document.querySelector(`[data-col="${col}"]`);
+    if(!colEl) return;
     // clear existing tasks
     colEl.querySelectorAll('[data-task]')?.forEach(n => n.remove());
     // set DnD
@@ -294,7 +311,8 @@ function renderBoard(){
   ensureAtLeastOneTask();
   const data = tabData[activeTab];
   columns.forEach(col => {
-    const colEl = document.getElementById(col);
+    const colEl = document.getElementById(col) || document.querySelector(`[data-col="${col}"]`);
+    if(!colEl) return;
     (data[col]||[]).forEach(t => { colEl.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); });
   });
 }
@@ -328,58 +346,56 @@ function persistTaskEdits(taskId, patch){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
   for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } }
-  saveTabsToStorage(); saveTabsToCloud();
+  saveToLocal(); saveTabsToCloud();
 }
 function removeTaskById(taskId){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
   for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } }
-  saveTabsToStorage(); renderBoard(); saveTabsToCloud();
+  saveToLocal(); renderBoard(); saveTabsToCloud();
 }
 function moveTaskToColumn(taskId, targetCol){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
   let found=null;
   for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ found = list.splice(idx,1)[0]; break; } }
-  if(found){ tabData[activeTab][targetCol] = tabData[activeTab][targetCol]||[]; tabData[activeTab][targetCol].push(found); saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
+  if(found){ tabData[activeTab][targetCol] = tabData[activeTab][targetCol]||[]; tabData[activeTab][targetCol].push(found); saveToLocal(); renderBoard(); saveTabsToCloud(); }
 }
-function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabData[activeTab] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
+function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabData[activeTab] = { todo:[], inprogress:[], done:[] }; saveToLocal(); renderBoard(); saveTabsToCloud(); }
 function addNewTask(){ if(!activeTab){ const def='Click to edit'; if(!tabData[def]) tabData[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); }
-  const id = `task-${Date.now()}`; const t = { id, content:'', dueDate:'', priority:'Medium' }; tabData[activeTab].todo.push(t); saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
+  const id = `task-${Date.now()}`; const t = { id, content:'', dueDate:'', priority:'Medium' }; tabData[activeTab].todo.push(t); saveToLocal(); renderBoard(); saveTabsToCloud(); }
 
-/*******************
- *  EXPORT           *
- *******************/
+/*************************
+ *  EXPORT
+ *************************/
 function exportBoardAsPDF(){ const board = document.getElementById('board'); html2pdf().set({ margin:.5, filename:'Solara-Board.pdf', image:{type:'jpeg',quality:.98}, html2canvas:{scale:2}, jsPDF:{unit:'in', format:'letter', orientation:'landscape'} }).from(board).save(); }
 
-/*******************
- *  BOOT             *
- *******************/
+/*************************
+ *  BOOT
+ *************************/
 document.addEventListener('DOMContentLoaded', async () => {
   // Require a workspace context
-  if(!WS){
-    // If you hit this, navigate back to the hub to choose a workspace
-    alert('No workspace selected. Go to workspace hub.');
-    location.replace('workspace.html');
-    return;
-  }
+  if(!WS){ setAlert('error','No workspace selected. Redirecting to hub…'); location.replace('workspace.html'); return; }
 
-  // Require session; show placeholder avatar until hydrated
+  // Require session & hydrate user
   const ok = await verifySessionAndHydrate();
-  if(!ok) return requireReauth();
+  if(!ok){ requireReauth(); return; }
+  wireAuthButtons();
 
-  // Ensure a default tab locally so the UI is never empty
+  // Load user+workspace-local first (so UI shows immediately)
+  loadFromLocal();
   if(Object.keys(tabData).length===0){ const def='Click to edit'; tabData[def] = { todo:[], inprogress:[], done:[] }; }
   activeTab = Object.keys(tabData)[0];
   renderTabs();
   switchTab(activeTab);
 
-  // Wire header buttons
-  wireAuthButtons();
-
-  // Pull cloud (workspace-aware). On success, re-render board & tabs.
+  // Pull from cloud and overwrite local if present
   const loaded = await loadTabsFromCloud();
-  if(loaded){ if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab; renderTabs(); switchTab(activeTab); }
+  if(loaded){
+    if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab;
+    renderTabs();
+    switchTab(activeTab);
+  }
 });
 </script>
 </body>
