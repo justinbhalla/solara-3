@@ -12,22 +12,25 @@
     .drag-over { background-color: rgba(99,102,241,.1); outline: 2px dashed #6366f1; outline-offset: -2px; }
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
     .editable { outline: none; min-height: 1.5rem; }
-    .skeleton { background: linear-gradient(90deg, rgba(0,0,0,.05), rgba(0,0,0,.12), rgba(0,0,0,.05)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
-    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-  <!-- Header: icon far left → title + subtitle; icon links to workspace hub -->
+
+  <!-- Missing WS banner (shown only if ws param is absent) -->
+  <div id="wsBanner" class="hidden bg-amber-50 text-amber-900 border-b border-amber-200 px-6 py-2 text-sm">
+    No workspace selected. <a class="underline font-medium" href="workspace.html">Go to Workspaces</a>
+  </div>
+
+  <!-- Header -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-    <div class="flex items-start gap-3">
-      <a href="workspace.html" class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-600 hover:bg-indigo-600/20" title="Go to Workspaces" aria-label="Go to Workspaces">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4z"/></svg>
-      </a>
+    <div class="flex items-center gap-3">
+      <a href="workspace.html" class="w-9 h-9 rounded-xl bg-indigo-600/10 flex items-center justify-center" title="Workspaces">🔷</a>
       <div>
         <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
       </div>
     </div>
+
     <!-- Signed-in user (name → email → initials). Visible by default; redirected if unauth. -->
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
@@ -46,17 +49,14 @@
     </div>
   </header>
 
-  <!-- Top alert for workspace or API issues -->
-  <div id="alert" class="hidden mx-6 mt-3 mb-0 p-3 rounded-xl text-sm"></div>
-
-  <!-- Nav: left = section tabs, right = actions (Trash + Plus) -->
+  <!-- Nav -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3h14v2H3V3zm0 4h9v2H3V7zm0 4h14v2H3v-2zm0 4h9v2H3v-2z"/></svg>
         <span>Tasks</span>
       </button>
-      <button onclick="window.location.href='reports.html'" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
+      <button onclick="window.location.href='reports.html?ws='+encodeURIComponent(WORKSPACE_ID)" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-4m4 4V8m4 8V5"/></svg>
         <span>Reports</span>
       </button>
@@ -72,19 +72,14 @@
   <!-- Main Board -->
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <!-- Skeletons to avoid empty flashes -->
-      <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
+      <div id="todo" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
         <h2 class="text-lg font-semibold mb-2">To Do</h2>
-        <div class="skeleton h-6 rounded mb-2"></div>
-        <div class="skeleton h-6 rounded w-2/3"></div>
       </div>
-      <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress">
+      <div id="inprogress" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress">
         <h2 class="text-lg font-semibold mb-2">In Progress</h2>
-        <div class="skeleton h-6 rounded mb-2"></div>
       </div>
-      <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done">
+      <div id="done" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done">
         <h2 class="text-lg font-semibold mb-2">Done</h2>
-        <div class="skeleton h-6 rounded w-1/2"></div>
       </div>
     </div>
   </main>
@@ -109,30 +104,49 @@
 /*************************
  *  CONFIG
  *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // Worker API
-const apiBase = API_BASE.replace(/\/+$/, '');
+const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev";
 const params = new URLSearchParams(location.search);
-let WS = params.get('ws') || localStorage.getItem('solara_ws') || '';
-if (WS) try{ localStorage.setItem('solara_ws', WS); }catch{}
+const WORKSPACE_ID = params.get('ws') || '';
+const apiBase = API_BASE.replace(/\/+$/, '');
+const apiUrl = (p) => apiBase + '/' + String(p||'').replace(/^\/+/, '');
 
-/*************************
- *  STATE (namespaced)
- *************************/
-let sessionJWT = null;
-let authedUser = null; // { name:{first_name,last_name}, email_addresses:[{email_address}] }
+/**************
+ *  STATE
+ **************/
 let activeTab = null;
-let tabData = {}; // loaded per user+workspace
+let tabData = {};               // hydrated from storage/cloud
+let sessionJWT = null;
+let authedUser = null;          // { name:{first_name,last_name}, email_addresses:[{email_address}] }
+let currentUserId = null;       // from /auth/check
+let currentEmail = null;
 
-function storageKey(){
-  const uid = (authedUser?.email_addresses?.[0]?.email_address || 'anon').toLowerCase();
-  const ws = WS || 'noworkspace';
-  return `solara-tabs:${uid}:${ws}`;
+/*******************
+ *  UTILITIES
+ *******************/
+const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+function getSessionJWT(){
+  const m = document.cookie.match(/(?:^|; )(?:stytch_session_jwt|solara_session_jwt)=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : (localStorage.getItem('stytch_session_jwt') || localStorage.getItem('solara_session_jwt') || null);
 }
 
-/*************************
- *  UTILITIES
- *************************/
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+function storageKey(){
+  const uid = currentUserId || currentEmail || 'anon';
+  const wid = WORKSPACE_ID || 'local';
+  return `solara:tabs:${uid}:${wid}`;
+}
+
+function loadTabsFromStorage(){
+  try {
+    const raw = localStorage.getItem(storageKey());
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveTabsToStorage(){
+  try { localStorage.setItem(storageKey(), JSON.stringify(tabData)); } catch {}
+}
+
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
   const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
@@ -145,37 +159,30 @@ function displayNameFor(user){
   if (parts.length) return parts.join(' ');
   return user?.email_addresses?.[0]?.email_address || initialsFor(user);
 }
-function setAlert(kind, msg){ const el=document.getElementById('alert'); el.className=`mx-6 mt-3 mb-0 p-3 rounded-xl text-sm ${kind==='error'?'bg-red-50 text-red-800 border border-red-200':'bg-emerald-50 text-emerald-800 border border-emerald-200'}`; el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'), 3500); }
 
-/*************************
- *  FETCH WRAPPER
- *************************/
-async function api(path, opts={}, { includeWS=true }={}){
-  const headers = { 'Content-Type':'application/json', ...(opts.headers||{}) };
-  if (sessionJWT) headers['Authorization'] = `Bearer ${sessionJWT}`;
-  if (includeWS && WS) headers['X-Workspace'] = WS;
-  const url = includeWS && WS ? `${apiBase}${path}${path.includes('?')?'&':'?'}ws=${encodeURIComponent(WS)}` : `${apiBase}${path}`;
-  const res = await fetch(url, { ...opts, headers, cache:'no-store' });
-  if (res.status === 401) { throw new Error('unauthorized'); }
-  if (res.status === 500) { try{ const body = await res.clone().json(); if ((body?.error||'').toLowerCase().includes('unauthorized')) throw new Error('unauthorized'); }catch{} }
-  return res;
-}
-
-/*************************
- *  AUTH
- *************************/
+/*******************
+ *  AUTH + HEADER UI
+ *******************/
 function requireReauth(){
-  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); }catch{}
-  location.replace('sign-in.html');
+  try{
+    localStorage.removeItem('stytch_session_jwt');
+    localStorage.removeItem('stytch_user');
+    localStorage.removeItem('solara_session_jwt');
+  }catch{}
+  location.replace('/sign-in.html');
 }
+
 function hydrateFromAuthCheckPayload(data){
   const full = (data?.name||'').trim();
   const parts = full ? full.split(/\s+/) : [];
   const first = parts[0] || '';
   const last  = parts.slice(1).join(' ') || '';
   const email = data?.email || '';
+  currentUserId = data?.user_id || currentUserId;
+  currentEmail  = email || currentEmail;
   return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
+
 function updateAuthUI(){
   const avatar = document.getElementById('avatar');
   const nameEl = document.getElementById('userName');
@@ -185,6 +192,7 @@ function updateAuthUI(){
   nameEl.textContent = displayNameFor(u) || 'User';
   emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
 }
+
 function wireAuthButtons(){
   document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden');
   document.addEventListener('click', (e)=>{
@@ -193,70 +201,96 @@ function wireAuthButtons(){
     if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
   });
   document.getElementById('signOutBtn').onclick = async () => {
-    try{ if(sessionJWT){ await api('/logout', { method:'POST' }, { includeWS:false }).catch(()=>{}); } }
-    finally{ requireReauth(); }
+    try{
+      if(sessionJWT){
+        await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${sessionJWT}` } }).catch(()=>{});
+      }
+    } finally {
+      requireReauth();
+    }
   };
   document.getElementById('addUserBtn').onclick = async () => {
     const email = prompt('Invite a user by email:');
     if(!email) return;
-    try{ const r = await api('/shares', { method:'POST', body: JSON.stringify({ email }) }); if(r.ok) alert('Invitation sent.'); else alert('Invite failed: '+await r.text()); }catch(err){ alert('Invite error: '+err.message); }
+    if(!sessionJWT) return requireReauth();
+    try{
+      const res = await fetch(apiUrl('shares'), {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}`, 'X-Workspace': WORKSPACE_ID||'' },
+        body: JSON.stringify({ email, workspace_id: WORKSPACE_ID||null })
+      });
+      if(res.ok) alert('Invitation sent.');
+      else alert('Invite failed: ' + (await res.text()));
+    }catch(err){ alert('Invite error: ' + err.message); }
   };
 }
+
 async function verifySessionAndHydrate(){
-  sessionJWT = localStorage.getItem('stytch_session_jwt');
+  sessionJWT = getSessionJWT();
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
   if(!sessionJWT) return false;
-  updateAuthUI();
+  updateAuthUI(); // cached immediately
+
   try{
-    const res = await api('/auth/check', {}, { includeWS:false });
-    if(!res.ok) return false;
+    const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
+    if(!res.ok){ return false; }
     const data = await res.json();
+    const fresh = hydrateFromAuthCheckPayload(data);
     if(!authedUser || (!authedUser.name && (!authedUser.email_addresses||!authedUser.email_addresses.length))){
-      authedUser = hydrateFromAuthCheckPayload(data);
-      try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
+      authedUser = fresh;
     } else {
-      const fresh = hydrateFromAuthCheckPayload(data);
       if (fresh.email_addresses?.[0]?.email_address && !authedUser.email_addresses?.length){ authedUser.email_addresses = fresh.email_addresses; }
       if ((fresh.name?.first_name||fresh.name?.last_name) && !(authedUser.name?.first_name||authedUser.name?.last_name)) authedUser.name = fresh.name;
-      try{ localStorage.setItem('stytch_user', JSON.stringify(authedUser)); }catch{}
     }
+    localStorage.setItem('stytch_user', JSON.stringify(authedUser));
     updateAuthUI();
     return true;
-  }catch(err){ return !!authedUser; }
+  }catch(err){
+    // Network hiccup → allow cached mode
+    return !!authedUser;
+  }
 }
 
-/*************************
- *  LOCAL STORAGE
- *************************/
-function loadFromLocal(){
-  try{ const raw = localStorage.getItem(storageKey()); if(raw){ tabData = JSON.parse(raw)||{}; } else { tabData = {}; } }catch{ tabData = {}; }
+/*******************
+ *  CLOUD SYNC
+ *******************/
+function buildFetchOpts(method='GET', body){
+  const headers = { 'Authorization': `Bearer ${sessionJWT}` };
+  if (WORKSPACE_ID) headers['X-Workspace'] = WORKSPACE_ID;
+  if (body) headers['Content-Type'] = 'application/json';
+  return { method, headers, ...(body?{ body: JSON.stringify(body) }:{}) };
 }
-function saveToLocal(){ try{ localStorage.setItem(storageKey(), JSON.stringify(tabData)); }catch{} }
 
-/*************************
- *  CLOUD SYNC (workspace-aware)
- *************************/
 const saveTabsToCloud = debounce(async ()=>{
-  if(!sessionJWT || !WS) return;
+  if(!sessionJWT || !WORKSPACE_ID) return;
   try{
-    const res = await api('/tasks', { method:'POST', body: JSON.stringify({ ws: WS, tabs: tabData }) });
-    if(!res.ok){ console.warn('Cloud save failed', await res.text()); }
+    const url = apiUrl('tasks') + `?ws=${encodeURIComponent(WORKSPACE_ID)}`;
+    const res = await fetch(url, buildFetchOpts('POST', { workspace_id: WORKSPACE_ID, tabs: tabData }));
+    if(res.status === 401){ console.warn('Cloud save unauthorized'); return; }
+    if(!res.ok) console.warn('Cloud save failed', await res.text());
   }catch(err){ console.warn('Cloud save error', err); }
 }, 450);
 
 async function loadTabsFromCloud(){
-  if(!sessionJWT || !WS) return false;
+  if(!sessionJWT || !WORKSPACE_ID) return false;
   try{
-    const res = await api('/tasks', {}, { includeWS:true });
-    if(res.status === 404){ return false; }
-    if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveToLocal(); return true; } }
+    const url = apiUrl('tasks') + `?ws=${encodeURIComponent(WORKSPACE_ID)}`;
+    const res = await fetch(url, buildFetchOpts('GET'));
+    if(res.status === 401) return false;
+    if(!res.ok){ console.warn('Cloud load failed', await res.text()); return false; }
+    const data = await res.json();
+    if (data && data.tabs && typeof data.tabs === 'object'){
+      tabData = data.tabs;
+      saveTabsToStorage();
+      return true;
+    }
   }catch(err){ console.warn('Cloud load error', err); }
   return false;
 }
 
-/*************************
- *  TABS UI
- *************************/
+/*******************
+ *  TABS
+ *******************/
 function renderTabs(){
   const tabsContainer = document.getElementById('tabs');
   tabsContainer.innerHTML = '';
@@ -264,7 +298,9 @@ function renderTabs(){
   names.forEach(name => {
     const tabBtn = document.createElement('button');
     tabBtn.className = `tab-button px-4 py-1.5 rounded-full text-sm font-medium bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-white transition-all duration-150 truncate max-w-[160px]`;
-    if (name === activeTab){ tabBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); }
+    if (name === activeTab){
+      tabBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30');
+    }
     tabBtn.dataset.tab = name;
     tabBtn.innerHTML = `<span>${name}</span>`;
     tabBtn.onclick = () => switchTab(name);
@@ -274,7 +310,7 @@ function renderTabs(){
       tabData[newName] = tabData[name];
       delete tabData[name];
       if (activeTab === name) activeTab = newName;
-      saveToLocal();
+      saveTabsToStorage();
       renderTabs();
       switchTab(activeTab);
       saveTabsToCloud();
@@ -283,23 +319,60 @@ function renderTabs(){
     tabsContainer.appendChild(tabBtn);
   });
 }
-function promptNewTab(){ const name = prompt('Enter tab name:'); if(!name || !name.trim()) return; addTab(name.trim()); }
-function addTab(name){ if(tabData[name]) return switchTab(name); tabData[name] = { todo:[], inprogress:[], done:[] }; saveToLocal(); renderTabs(); switchTab(name); saveTabsToCloud(); }
-function deleteTab(name){ if(!confirm(`Delete tab "${name}" and all its tasks?`)) return; delete tabData[name]; if(activeTab===name) activeTab = Object.keys(tabData)[0]||null; saveToLocal(); renderTabs(); renderBoard(); saveTabsToCloud(); }
 
-/*************************
+function promptNewTab(){
+  const name = prompt('Enter tab name:');
+  if(!name || !name.trim()) return;
+  addTab(name.trim());
+}
+
+function addTab(name){
+  if(tabData[name]) return switchTab(name);
+  tabData[name] = { todo:[], inprogress:[], done:[] };
+  saveTabsToStorage();
+  renderTabs();
+  switchTab(name);
+  saveTabsToCloud();
+}
+
+function deleteTab(name){
+  if(!confirm(`Delete tab "${name}" and all its tasks?`)) return;
+  delete tabData[name];
+  if(activeTab===name) activeTab = Object.keys(tabData)[0]||null;
+  saveTabsToStorage();
+  renderTabs();
+  renderBoard();
+  saveTabsToCloud();
+}
+
+/*******************
  *  BOARD LOGIC
- *************************/
-function switchTab(tabName){ if(!tabData[tabName]) return; activeTab = tabName; document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30')); const activeBtn = Array.from(document.querySelectorAll('.tab-button')).find(b => b.dataset.tab===tabName); if(activeBtn){ activeBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'); } renderBoard(); }
+ *******************/
+function switchTab(tabName){
+  if(!tabData[tabName]) return;
+  activeTab = tabName;
+  document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30'));
+  const activeBtn = Array.from(document.querySelectorAll('.tab-button')).find(b => b.dataset.tab===tabName);
+  if(activeBtn){
+    activeBtn.classList.add('border-indigo-500','text-indigo-700','dark:text-white','font-semibold','bg-indigo-50','dark:bg-indigo-600/30');
+  }
+  renderBoard();
+}
 
-function ensureAtLeastOneTask(){ const cols = tabData[activeTab]; if(!cols) return; if((cols.todo?.length||0)+(cols.inprogress?.length||0)+(cols.done?.length||0)===0){ const id = `task-${Date.now()}`; cols.todo.push({ id, content:'', dueDate:'', priority:'Medium' }); } }
+function ensureAtLeastOneTask(){
+  const cols = tabData[activeTab];
+  if(!cols) return;
+  if((cols.todo?.length||0)+(cols.inprogress?.length||0)+(cols.done?.length||0)===0){
+    const id = `task-${Date.now()}`;
+    cols.todo.push({ id, content:'', dueDate:'', priority:'Medium' });
+  }
+}
 
 function renderBoard(){
   const columns = ['todo','inprogress','done'];
-  // prep lanes DnD
+  // prepare lanes DnD
   columns.forEach(col => {
-    const colEl = document.getElementById(col) || document.querySelector(`[data-col="${col}"]`);
-    if(!colEl) return;
+    const colEl = document.getElementById(col);
     // clear existing tasks
     colEl.querySelectorAll('[data-task]')?.forEach(n => n.remove());
     // set DnD
@@ -307,28 +380,59 @@ function renderBoard(){
     colEl.ondragleave = ()=> colEl.classList.remove('drag-over');
     colEl.ondrop = (e)=>{ e.preventDefault(); colEl.classList.remove('drag-over'); const taskId = e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId, col); };
   });
+
   if(!activeTab || !tabData[activeTab]) return;
   ensureAtLeastOneTask();
   const data = tabData[activeTab];
+
   columns.forEach(col => {
-    const colEl = document.getElementById(col) || document.querySelector(`[data-col="${col}"]`);
-    if(!colEl) return;
-    (data[col]||[]).forEach(t => { colEl.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); });
+    const colEl = document.getElementById(col);
+    (data[col]||[]).forEach(t => {
+      colEl.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col));
+    });
   });
 }
 
 function createTaskElement(id, content='', dueDate='', priority='Medium', column){
   const wrapper = document.createElement('div');
-  wrapper.id = id; wrapper.setAttribute('data-task','1'); wrapper.draggable = true; wrapper.className = 'relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2'; wrapper.setAttribute('data-column', column);
+  wrapper.id = id;
+  wrapper.setAttribute('data-task','1');
+  wrapper.draggable = true;
+  wrapper.className = 'relative p-3 rounded bg-white dark:bg-gray-700 shadow cursor-move mb-2';
+  wrapper.setAttribute('data-column', column);
 
-  const editable = document.createElement('div'); editable.className = 'editable w-full font-medium mb-1'; editable.contentEditable = true; editable.innerText = content;
-  const placeholder = document.createElement('span'); placeholder.className = 'absolute left-3 top-3 text-sm text-gray-400 pointer-events-none'; placeholder.textContent = 'Click to edit...';
+  const editable = document.createElement('div');
+  editable.className = 'editable w-full font-medium mb-1';
+  editable.contentEditable = true;
+  editable.innerText = content;
+
+  const placeholder = document.createElement('span');
+  placeholder.className = 'absolute left-3 top-3 text-sm text-gray-400 pointer-events-none';
+  placeholder.textContent = 'Click to edit...';
   function togglePlaceholder(){ placeholder.style.display = editable.innerText.trim()==='' ? 'block' : 'none'; }
 
-  const row = document.createElement('div'); row.className = 'flex items-center gap-2';
-  const dateInput = document.createElement('input'); dateInput.type = 'date'; dateInput.value = dueDate || ''; dateInput.className = 'mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300';
-  const prioritySelect = document.createElement('select'); prioritySelect.className = 'mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); });
-  const deleteBtn = document.createElement('button'); deleteBtn.className = 'absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title = 'Delete Task'; deleteBtn.onclick = () => { if(confirm('Delete this task?')) removeTaskById(id); };
+  const row = document.createElement('div');
+  row.className = 'flex items-center gap-2';
+
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.value = dueDate || '';
+  dateInput.className = 'mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300';
+
+  const prioritySelect = document.createElement('select');
+  prioritySelect.className = 'mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1';
+  ['High','Medium','Low'].forEach(level=>{
+    const opt=document.createElement('option');
+    opt.value=level; opt.text=level;
+    if(level===priority) opt.selected=true;
+    prioritySelect.appendChild(opt);
+  });
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'absolute top-2 right-2 text-gray-400 hover:text-red-500';
+  deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+  deleteBtn.title = 'Delete Task';
+  deleteBtn.onclick = () => { if(confirm('Delete this task?')) removeTaskById(id); };
 
   editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); });
   editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() }));
@@ -336,8 +440,12 @@ function createTaskElement(id, content='', dueDate='', priority='Medium', column
   prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' }));
   wrapper.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', id); });
 
-  row.appendChild(dateInput); row.appendChild(prioritySelect);
-  wrapper.appendChild(editable); wrapper.appendChild(placeholder); wrapper.appendChild(row); wrapper.appendChild(deleteBtn);
+  row.appendChild(dateInput);
+  row.appendChild(prioritySelect);
+  wrapper.appendChild(editable);
+  wrapper.appendChild(placeholder);
+  wrapper.appendChild(row);
+  wrapper.appendChild(deleteBtn);
   togglePlaceholder();
   return wrapper;
 }
@@ -345,51 +453,109 @@ function createTaskElement(id, content='', dueDate='', priority='Medium', column
 function persistTaskEdits(taskId, patch){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } }
-  saveToLocal(); saveTabsToCloud();
+  for(const col of cols){
+    const list = tabData[activeTab][col]||[];
+    const idx = list.findIndex(t=>t.id===taskId);
+    if(idx!==-1){ Object.assign(list[idx], patch); break; }
+  }
+  saveTabsToStorage();
+  saveTabsToCloud();
 }
+
 function removeTaskById(taskId){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } }
-  saveToLocal(); renderBoard(); saveTabsToCloud();
+  for(const col of cols){
+    const list = tabData[activeTab][col]||[];
+    const idx = list.findIndex(t=>t.id===taskId);
+    if(idx!==-1){ list.splice(idx,1); break; }
+  }
+  saveTabsToStorage();
+  renderBoard();
+  saveTabsToCloud();
 }
+
 function moveTaskToColumn(taskId, targetCol){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
   let found=null;
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ found = list.splice(idx,1)[0]; break; } }
-  if(found){ tabData[activeTab][targetCol] = tabData[activeTab][targetCol]||[]; tabData[activeTab][targetCol].push(found); saveToLocal(); renderBoard(); saveTabsToCloud(); }
+  for(const col of cols){
+    const list = tabData[activeTab][col]||[];
+    const idx = list.findIndex(t=>t.id===taskId);
+    if(idx!==-1){ found = list.splice(idx,1)[0]; break; }
+  }
+  if(found){
+    tabData[activeTab][targetCol] = tabData[activeTab][targetCol]||[];
+    tabData[activeTab][targetCol].push(found);
+    saveTabsToStorage();
+    renderBoard();
+    saveTabsToCloud();
+  }
 }
-function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabData[activeTab] = { todo:[], inprogress:[], done:[] }; saveToLocal(); renderBoard(); saveTabsToCloud(); }
-function addNewTask(){ if(!activeTab){ const def='Click to edit'; if(!tabData[def]) tabData[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); }
-  const id = `task-${Date.now()}`; const t = { id, content:'', dueDate:'', priority:'Medium' }; tabData[activeTab].todo.push(t); saveToLocal(); renderBoard(); saveTabsToCloud(); }
 
-/*************************
+function clearAllTasks(){
+  if(!activeTab) return;
+  if(!confirm('Clear all tasks in this tab?')) return;
+  tabData[activeTab] = { todo:[], inprogress:[], done:[] };
+  saveTabsToStorage();
+  renderBoard();
+  saveTabsToCloud();
+}
+
+function addNewTask(){
+  if(!activeTab){
+    const def='Click to edit';
+    if(!tabData[def]) tabData[def]={ todo:[], inprogress:[], done:[] };
+    activeTab=def;
+    renderTabs();
+  }
+  const id = `task-${Date.now()}`;
+  const t = { id, content:'', dueDate:'', priority:'Medium' };
+  tabData[activeTab].todo.push(t);
+  saveTabsToStorage();
+  renderBoard();
+  saveTabsToCloud();
+}
+
+/*******************
  *  EXPORT
- *************************/
-function exportBoardAsPDF(){ const board = document.getElementById('board'); html2pdf().set({ margin:.5, filename:'Solara-Board.pdf', image:{type:'jpeg',quality:.98}, html2canvas:{scale:2}, jsPDF:{unit:'in', format:'letter', orientation:'landscape'} }).from(board).save(); }
+ *******************/
+function exportBoardAsPDF(){
+  const board = document.getElementById('board');
+  html2pdf().set({
+    margin:.5,
+    filename:'Solara-Board.pdf',
+    image:{type:'jpeg',quality:.98},
+    html2canvas:{scale:2},
+    jsPDF:{unit:'in', format:'letter', orientation:'landscape'}
+  }).from(board).save();
+}
 
-/*************************
+/*******************
  *  BOOT
- *************************/
+ *******************/
 document.addEventListener('DOMContentLoaded', async () => {
-  // Require a workspace context
-  if(!WS){ setAlert('error','No workspace selected. Redirecting to hub…'); location.replace('workspace.html'); return; }
+  // Workspace hint (optional local mode without ws)
+  if(!WORKSPACE_ID){ document.getElementById('wsBanner').classList.remove('hidden'); }
 
-  // Require session & hydrate user
+  // Require session; show placeholder avatar until hydrated
   const ok = await verifySessionAndHydrate();
-  if(!ok){ requireReauth(); return; }
-  wireAuthButtons();
+  if(!ok) return requireReauth();
 
-  // Load user+workspace-local first (so UI shows immediately)
-  loadFromLocal();
-  if(Object.keys(tabData).length===0){ const def='Click to edit'; tabData[def] = { todo:[], inprogress:[], done:[] }; }
+  // NOW we have user_id/email → load namespaced local tabs
+  tabData = loadTabsFromStorage();
+  if(Object.keys(tabData).length===0){
+    const def='Click to edit';
+    tabData[def] = { todo:[], inprogress:[], done:[] };
+  }
   activeTab = Object.keys(tabData)[0];
   renderTabs();
   switchTab(activeTab);
 
-  // Pull from cloud and overwrite local if present
+  // Wire header buttons
+  wireAuthButtons();
+
+  // Try cloud load (only if workspace id present). If found, replace and repaint.
   const loaded = await loadTabsFromCloud();
   if(loaded){
     if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab;
