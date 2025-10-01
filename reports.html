@@ -7,34 +7,30 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
-    .card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)}
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
+    .card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)}
     .sublabel{letter-spacing:.01em}
-    .icon-btn { transition: transform .08s ease; }
-    .icon-btn:active { transform: translateY(1px) scale(.98); }
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
 
-  <!-- Missing WS banner (shown only if ws param is absent) -->
+  <!-- Workspace hint banner (only shows if no ws param found) -->
   <div id="wsBanner" class="hidden bg-amber-50 text-amber-900 border-b border-amber-200 px-6 py-2 text-sm">
     No workspace selected. <a class="underline font-medium" href="workspace.html">Go to Workspaces</a>
   </div>
 
-  <!-- Header (icon far-left → link to hub; title + sublabel stacked) -->
-  <header class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-    <div class="flex items-start gap-3">
-      <a href="workspace.html" class="mt-1 inline-flex w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 items-center justify-center" title="Workspaces" aria-label="Workspaces">
-        <!-- Indigo diamond-ish icon -->
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4zm0 2.3L7 7.5v8.9l5 2.8 5-2.8V7.5l-5-2.2z"/></svg>
-      </a>
+  <!-- Header (duplicate styles from Solara) -->
+  <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div class="flex items-center gap-3">
+      <!-- Indigo icon linking back to the Workspace hub (same as Solara) -->
+      <a href="workspace.html" class="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center hover:bg-indigo-600/20" title="Back to Workspaces" aria-label="Back to Workspaces">🔷</a>
       <div>
-        <h1 class="text-3xl font-bold tracking-tight leading-none">Solara</h1>
+        <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 sublabel">Part of the ZLG Product Suite</p>
       </div>
     </div>
 
-    <!-- Signed-in user (name → email → initials). Visible by default; redirected if unauth. -->
+    <!-- Signed-in user (name → email → initials) -->
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition" aria-haspopup="menu" aria-expanded="false" aria-controls="userMenu">
         <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
@@ -51,7 +47,7 @@
     </div>
   </header>
 
-  <!-- Nav (matches Solara): left = section tabs; right = actions -->
+  <!-- Nav: left = section tabs, right = actions (buttons duplicated from Solara) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button onclick="goTasks()" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
@@ -59,28 +55,27 @@
         <span>Tasks</span>
       </button>
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
-        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-4m4 4V8m4 8V5"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-4m4 4V8m4 8V5"/></svg>
         <span>Reports</span>
       </button>
     </div>
-    <!-- Icon-only actions -->
-    <div class="flex items-center gap-2">
-      <!-- Clear extras (trash icon) -->
+    <div class="flex items-center gap-3">
+      <!-- Clear extras (duplicate Solara trash button styles) -->
       <button
         onclick="clearReports()"
-        class="icon-btn inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-100 text-red-600 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-400"
         title="Clear extra blocks"
-        aria-label="Clear extra blocks">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        aria-label="Clear extra blocks"
+        class="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M10 11v6m4-6v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2L18 7M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
         </svg>
       </button>
-      <!-- Add report block (plus icon) -->
+      <!-- Add report block (duplicate Solara “Add Tab” pill: rounded-full green icon) -->
       <button
         onclick="addReportBlock()"
-        class="icon-btn inline-flex items-center justify-center w-9 h-9 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400"
         title="Add report block"
-        aria-label="Add report block">
+        aria-label="Add report block"
+        class="p-2 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition duration-150 shadow-sm border border-green-200">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
@@ -88,7 +83,7 @@
     </div>
   </nav>
 
-  <!-- Main Content (same width rhythm as Solara: p-6 full-width) -->
+  <!-- Main Content -->
   <main class="p-6 flex-1 overflow-y-auto">
     <div id="report-area" class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Completion Rate -->
@@ -123,12 +118,12 @@
     </div>
   </main>
 
-  <!-- Sticky Footer (export lives here, like Solara) -->
+  <!-- Bottom rail (export right) – duplicated export button style -->
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3">
       <span class="text-sm text-gray-500 dark:text-gray-400"></span>
-      <button onclick="exportReportsAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600" title="Export as PDF" aria-label="Export as PDF">
-        <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16l4-5h-3V4h-2v7H8l4 5zm-7 4h14v-2H5v2z"/></svg>
+      <button onclick="exportReportsAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition" title="Download Report PDF" aria-label="Download Report PDF">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16l4-5h-3V4h-2v7H8l4 5zm-7 4h14v-2H5v2z"/></svg>
       </button>
     </div>
     <footer class="text-center text-xs text-gray-500 dark:text-gray-400 px-6 py-3 border-t border-gray-200 dark:border-gray-700">© 2025 ZenLock Group (ZLG). All rights reserved.</footer>
@@ -140,28 +135,28 @@
  *************************/
 const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // same Worker as Solara
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
-const params = new URLSearchParams(location.search);
-const WORKSPACE_ID = params.get('ws') || localStorage.getItem('solara_last_ws') || '';
 
 /**************
  *  STATE     *
  **************/
+let WORKSPACE_ID = '';
 let sessionJWT = null;
 let authedUser = null;
-let currentUserId = null; // from /auth/check
+let currentUserKey = null; // user_id or email for namespacing
 let tabData = {}; // hydrated from storage + cloud
 
 /*******************
  *  UTILITIES       *
  *******************/
-const getSessionJWT = () => {
+function getSessionJWT(){
   const m = document.cookie.match(/(?:^|; )(?:stytch_session_jwt|solara_session_jwt)=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : (localStorage.getItem('stytch_session_jwt') || localStorage.getItem('solara_session_jwt') || null);
-};
+}
 function storageKey(){
-  const uid = currentUserId || 'anon';
+  // duplicate Solara key scheme
+  const uid = currentUserKey || 'anon';
   const wid = WORKSPACE_ID || 'local';
-  return `solara-tabs::${uid}::${wid}`;
+  return `solara:tabs:${uid}:${wid}`;
 }
 function loadTabsFromStorage(){
   try{ const raw = localStorage.getItem(storageKey()); return raw ? JSON.parse(raw) : {}; }catch{ return {}; }
@@ -181,7 +176,7 @@ function displayNameFor(user){
 }
 
 /*******************
- *  AUTH             *
+ *  AUTH            *
  *******************/
 function requireReauth(){
   try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); localStorage.removeItem('solara_session_jwt'); }catch{}
@@ -193,7 +188,8 @@ function hydrateFromAuthCheckPayload(data){
   const first = parts[0] || '';
   const last  = parts.slice(1).join(' ') || '';
   const email = data?.email || '';
-  currentUserId = data?.user_id || currentUserId;
+  const uid   = data?.user_id || email || 'anon';
+  currentUserKey = uid;
   return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
 function updateAuthUI(){
@@ -206,10 +202,11 @@ function updateAuthUI(){
   emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
 }
 function wireAuthButtons(){
-  document.getElementById('userButton').onclick = () => {
+  const btn = document.getElementById('userButton');
+  btn.onclick = () => {
     const menu = document.getElementById('userMenu');
     const expanded = menu.classList.contains('hidden') ? 'true' : 'false';
-    document.getElementById('userButton').setAttribute('aria-expanded', expanded);
+    btn.setAttribute('aria-expanded', expanded);
     menu.classList.toggle('hidden');
   };
   document.addEventListener('click', (e)=>{
@@ -225,10 +222,9 @@ function wireAuthButtons(){
 async function verifySessionAndHydrate(){
   sessionJWT = getSessionJWT();
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
-  if(!sessionJWT) return false; // redirect to sign-in
+  if(!sessionJWT) return false;
 
-  // Cached UI first
-  updateAuthUI();
+  updateAuthUI(); // optimistic
 
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
@@ -264,7 +260,7 @@ async function loadTabsFromCloud(){
 }
 
 /*******************
- *  REPORTS DATA     *
+ *  METRICS          *
  *******************/
 function getAllTasks(){
   const out = [];
@@ -288,14 +284,13 @@ function computeMetrics(){
     if (t.status==='todo') todo++; else if (t.status==='inprogress') inprogress++; else if (t.status==='done') done++;
     const p = t.priority || 'Medium'; if(priority[p]!==undefined) priority[p]++;
     if (t.status!=='done' && t.dueDate){ const d = new Date(t.dueDate); if(!isNaN(d) && d < now) overdue++; }
-    // derive age from id timestamp (task-<millis>) when present
-    const m = String(t.id||'').match(/task-(\d+)/); if(m){ const created = new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum += (now - created)/(1000*60*60*24); }
+    const m = String(t.id||'').match(/task-(\d+)/);
+    if(m){ const created = new Date(parseInt(m[1],10)); if(!isNaN(created)) ageSum += (now - created)/(1000*60*60*24); }
   });
   const completionRate = total ? Math.round((done/total)*100) : 0;
   const avgAge = total ? Math.round(ageSum/Math.max(total,1)) : 0;
   return { total, todo, inprogress, done, completionRate, overdue, avgAge, priority };
 }
-
 function paintCards(){
   const m = computeMetrics();
   document.getElementById('todoCount').textContent = m.todo;
@@ -347,8 +342,9 @@ function clearReports(){
  *  NAV              *
  *******************/
 function goTasks(){
-  const ws = WORKSPACE_ID || localStorage.getItem('solara_last_ws') || '';
-  location.href = ws ? `solara.html?ws=${encodeURIComponent(ws)}` : 'solara.html';
+  const url = new URL('solara.html', location.origin);
+  if (WORKSPACE_ID) url.searchParams.set('ws', WORKSPACE_ID);
+  location.href = url.toString();
 }
 
 /*******************
@@ -363,8 +359,18 @@ function exportReportsAsPDF(){
 /*******************
  *  BOOT             *
  *******************/
+function maybeAttachLastWorkspace(){
+  const url = new URL(location.href);
+  if (url.searchParams.get('ws')) return;
+  const last = localStorage.getItem('solara_last_ws');
+  if (last){ url.searchParams.set('ws', last); history.replaceState(null,'',url.toString()); }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
-  // Workspace check
+  // Adopt last workspace if needed (duplicate Solara behavior)
+  maybeAttachLastWorkspace();
+  const url = new URL(location.href);
+  WORKSPACE_ID = url.searchParams.get('ws') || '';
   if(!WORKSPACE_ID){ document.getElementById('wsBanner').classList.remove('hidden'); }
 
   // Auth required
