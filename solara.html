@@ -9,9 +9,12 @@
   <style>
     .fade-in { animation: fadeIn .25s ease-in-out; }
     @keyframes fadeIn { from { opacity:.0; } to { opacity:1; } }
-    .drag-over { background-color: rgba(99,102,241,.1); outline: 2px dashed #6366f1; outline-offset: -2px; }
+    .drag-over { background-color: rgba(99,102,241,.08); outline: 2px dashed #6366f1; outline-offset: -2px; }
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
     .editable { outline: none; min-height: 1.5rem; }
+    .dragging { opacity: .6; transform: rotate(.5deg); }
+    .drop-indicator { height: .5rem; border-radius: .25rem; background: rgba(99,102,241,.45); margin: .25rem 0; display: none; }
+    .show-drop .drop-indicator { display: block; }
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
@@ -32,7 +35,7 @@
       </div>
     </div>
 
-    <!-- Signed-in user (name → email → initials). Visible by default; redirected if unauth. -->
+    <!-- Signed-in user -->
     <div id="userArea" class="relative">
       <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
         <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
@@ -75,12 +78,15 @@
     <div id="board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div id="todo" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="todo">
         <h2 class="text-lg font-semibold mb-2">To Do</h2>
+        <div class="drop-indicator"></div>
       </div>
       <div id="inprogress" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="inprogress">
         <h2 class="text-lg font-semibold mb-2">In Progress</h2>
+        <div class="drop-indicator"></div>
       </div>
       <div id="done" class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-sm" data-col="done">
         <h2 class="text-lg font-semibold mb-2">Done</h2>
+        <div class="drop-indicator"></div>
       </div>
     </div>
   </main>
@@ -106,7 +112,7 @@
  *  CONFIG               *
  *************************/
 const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // Worker origin
-const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+const apiUrl = (p) => API_BASE.replace(/\/+$/,'') + '/' + String(p||'').replace(/^\/+/,'');
 
 /**************
  *  STATE     *
@@ -117,6 +123,7 @@ let tabData = {}; // hydrated from local/cloud
 let sessionJWT = null;
 let authedUser = null; // { name:{first_name,last_name}, email_addresses:[{email_address}] }
 let currentUserKey = null; // user_id or email for namespacing
+let dragContext = { id:null, fromCol:null, overCol:null, insertIndex:null }; // for precise reordering
 
 /*******************
  *  UTILITIES       *
@@ -131,9 +138,7 @@ function storageKey(){
   const wid = WORKSPACE_ID || 'local';
   return `solara:tabs:${uid}:${wid}`;
 }
-function loadTabsFromStorage(){
-  try { const raw = localStorage.getItem(storageKey()); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
-}
+function loadTabsFromStorage(){ try { const raw = localStorage.getItem(storageKey()); return raw ? JSON.parse(raw) : {}; } catch { return {}; } }
 function saveTabsToStorage(){ try{ localStorage.setItem(storageKey(), JSON.stringify(tabData)); }catch{} }
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
@@ -311,17 +316,37 @@ function renderBoard(){
   // prepare lanes DnD
   columns.forEach(col => {
     const colEl = document.getElementById(col);
-    // clear existing tasks
+    // clear existing tasks (keep header + drop-indicator)
     colEl.querySelectorAll('[data-task]')?.forEach(n => n.remove());
+
     // set DnD
-    colEl.ondragover = (e)=>{ e.preventDefault(); colEl.classList.add('drag-over'); };
-    colEl.ondragleave = ()=> colEl.classList.remove('drag-over');
-    colEl.ondrop = (e)=>{ e.preventDefault(); colEl.classList.remove('drag-over'); const taskId = e.dataTransfer.getData('text/plain'); moveTaskToColumn(taskId, col); };
+    colEl.ondragover = (e)=>{
+      e.preventDefault();
+      colEl.classList.add('drag-over','show-drop');
+      const after = getDragAfterElement(colEl, e.clientY);
+      const indicator = colEl.querySelector('.drop-indicator');
+      if(after == null){
+        colEl.appendChild(indicator);
+      } else {
+        colEl.insertBefore(indicator, after);
+      }
+      dragContext.overCol = colEl.dataset.col;
+      dragContext.insertIndex = computeInsertIndex(colEl, indicator);
+    };
+    colEl.ondragleave = ()=>{ colEl.classList.remove('drag-over','show-drop'); };
+    colEl.ondrop = (e)=>{
+      e.preventDefault();
+      colEl.classList.remove('drag-over','show-drop');
+      const id = dragContext.id;
+      if(!id) return;
+      commitReorder(id, dragContext.fromCol, colEl.dataset.col, dragContext.insertIndex);
+      clearDragContext();
+    };
   });
   if(!activeTab || !tabData[activeTab]) return;
   ensureAtLeastOneTask();
   const data = tabData[activeTab];
-  columns.forEach(col => {
+  ['todo','inprogress','done'].forEach(col => {
     const colEl = document.getElementById(col);
     (data[col]||[]).forEach(t => { colEl.appendChild(createTaskElement(t.id, t.content, t.dueDate, t.priority, col)); });
   });
@@ -340,16 +365,71 @@ function createTaskElement(id, content='', dueDate='', priority='Medium', column
   const prioritySelect = document.createElement('select'); prioritySelect.className = 'mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); });
   const deleteBtn = document.createElement('button'); deleteBtn.className = 'absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title = 'Delete Task'; deleteBtn.onclick = () => { if(confirm('Delete this task?')) removeTaskById(id); };
 
+  // DnD events (precise reorder)
+  wrapper.addEventListener('dragstart', e => {
+    wrapper.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', id);
+    dragContext.id = id;
+    dragContext.fromCol = wrapper.getAttribute('data-column');
+  });
+  wrapper.addEventListener('dragend', () => { wrapper.classList.remove('dragging'); });
+
   editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); });
   editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() }));
   dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: dateInput.value || '' }));
   prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' }));
-  wrapper.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', id); });
 
   row.appendChild(dateInput); row.appendChild(prioritySelect);
   wrapper.appendChild(editable); wrapper.appendChild(placeholder); wrapper.appendChild(row); wrapper.appendChild(deleteBtn);
   togglePlaceholder();
   return wrapper;
+}
+
+// ---- Precise reorder helpers ----
+function clearDragContext(){ dragContext = { id:null, fromCol:null, overCol:null, insertIndex:null }; }
+function getDragAfterElement(container, y){
+  const draggableElements = [...container.querySelectorAll('[data-task]:not(.dragging)')];
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) { return { offset: offset, element: child }; } else { return closest; }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+function computeInsertIndex(colEl, indicator){
+  // Index among tasks for where the indicator currently sits
+  const siblings = [...colEl.querySelectorAll('[data-task]')];
+  if (siblings.length === 0) return 0;
+  // indicator is placed before an element or at end; compute index based on next element
+  const all = [...colEl.children];
+  let index = 0;
+  for (let i=0; i<all.length; i++){
+    const el = all[i];
+    if(el === indicator){
+      // count how many tasks appear before indicator
+      index = [...all.slice(0,i)].filter(n => n.hasAttribute && n.hasAttribute('data-task')).length;
+      return index;
+    }
+  }
+  // fallback to end
+  return siblings.length;
+}
+function commitReorder(taskId, fromCol, toCol, insertIndex){
+  if(!activeTab || !tabData[activeTab]) return;
+  const cols = tabData[activeTab];
+  // remove from origin
+  let moved; const fromList = cols[fromCol]||[]; const i = fromList.findIndex(t=>t.id===taskId);
+  if(i !== -1){ moved = fromList.splice(i,1)[0]; }
+  if(!moved) return;
+
+  // insert into target at exact position
+  const target = cols[toCol] = cols[toCol]||[];
+  if(insertIndex == null || insertIndex < 0) insertIndex = target.length;
+  if(insertIndex > target.length) insertIndex = target.length;
+  target.splice(insertIndex, 0, moved);
+
+  saveTabsToStorage();
+  renderBoard();
+  saveTabsToCloud();
 }
 
 function persistTaskEdits(taskId, patch){
@@ -363,13 +443,6 @@ function removeTaskById(taskId){
   const cols = ['todo','inprogress','done'];
   for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ list.splice(idx,1); break; } }
   saveTabsToStorage(); renderBoard(); saveTabsToCloud();
-}
-function moveTaskToColumn(taskId, targetCol){
-  if(!activeTab || !tabData[activeTab]) return;
-  const cols = ['todo','inprogress','done'];
-  let found=null;
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ found = list.splice(idx,1)[0]; break; } }
-  if(found){ tabData[activeTab][targetCol] = tabData[activeTab][targetCol]||[]; tabData[activeTab][targetCol].push(found); saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
 }
 function clearAllTasks(){ if(!activeTab) return; if(!confirm('Clear all tasks in this tab?')) return; tabData[activeTab] = { todo:[], inprogress:[], done:[] }; saveTabsToStorage(); renderBoard(); saveTabsToCloud(); }
 function addNewTask(){ if(!activeTab){ const def='Click to edit'; if(!tabData[def]) tabData[def]={ todo:[], inprogress:[], done:[] }; activeTab=def; renderTabs(); }
