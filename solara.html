@@ -15,6 +15,7 @@
     .dragging { opacity: .6; transform: rotate(.5deg); }
     .drop-indicator { height: .5rem; border-radius: .25rem; background: rgba(99,102,241,.45); margin: .25rem 0; display: none; }
     .show-drop .drop-indicator { display: block; }
+    .date-badge { font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
@@ -142,13 +143,30 @@ function computeStorageNS() {
   const uid = uidFromAuth || cachedUid;
   const wid = widFromUrl  || cachedWid;
   STORAGE_NS = `solara:tabs:${uid}:${wid}`;
-  // keep these fresh for the next boot—even if auth drops
   localStorage.setItem('solara_last_uid', uid);
   localStorage.setItem('solara_last_ws', wid);
 }
 function storageKey(){ if(!STORAGE_NS) computeStorageNS(); return STORAGE_NS; }
-function loadTabsFromStorage(){ try { const raw = localStorage.getItem(storageKey()); if(raw) return JSON.parse(raw); const backup = localStorage.getItem('solara_tabs_backup'); return backup ? JSON.parse(backup) : {}; } catch { return {}; } }
-function saveTabsToStorage(){ const key = storageKey(); const json = JSON.stringify(tabData); try{ localStorage.setItem(key, json); localStorage.setItem('solara_tabs_backup', json); }catch(e){ console.warn('Local save failed, writing backup', e); try{ localStorage.setItem('solara_tabs_backup', json); }catch{} } }
+function normalizeDateString(input){
+  if(!input) return '';
+  if(typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+  const d = new Date(input);
+  if (isNaN(d)) return '';
+  const tz = d.getTimezoneOffset()*60000;
+  return new Date(d.getTime()-tz).toISOString().slice(0,10);
+}
+function loadTabsFromStorage(){
+  try {
+    const raw = localStorage.getItem(storageKey());
+    const parsed = raw ? JSON.parse(raw) : {};
+    return migrateTaskShapes(parsed);
+  } catch { return {}; }
+}
+function saveTabsToStorage(){
+  const key = storageKey();
+  const json = JSON.stringify(tabData);
+  try{ localStorage.setItem(key, json); localStorage.setItem('solara_tabs_backup', json); }catch(e){ console.warn('Local save failed, writing backup', e); try{ localStorage.setItem('solara_tabs_backup', json); }catch{} }
+}
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
   const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
@@ -178,6 +196,22 @@ function migrateLegacyIfNeeded(){
       console.info('[Solara] Migrated legacy tabs →', newKey);
     }
   } catch {}
+}
+
+// Shape migration: ensure dueDate is normalized string or ''
+function migrateTaskShapes(data){
+  const out = JSON.parse(JSON.stringify(data||{}));
+  Object.keys(out||{}).forEach(tab => {
+    ['todo','inprogress','done'].forEach(col => {
+      out[tab][col] = (out[tab][col]||[]).map(t => ({
+        id: t.id || `task-${Date.now()}`,
+        content: typeof t.content === 'string' ? t.content : '',
+        dueDate: normalizeDateString(t.dueDate),
+        priority: ['High','Medium','Low'].includes(t.priority) ? t.priority : 'Medium'
+      }));
+    });
+  });
+  return out;
 }
 
 /*******************
@@ -216,8 +250,9 @@ async function loadTabsFromCloud(){
     if(!res.ok) return false;
     const data = await res.json();
     if(!data || !data.tabs) return false;
-    // Merge: prefer local per-tab if exists; otherwise take cloud
-    const merged = { ...data.tabs, ...tabData };
+    const cloud = migrateTaskShapes(data.tabs);
+    // Merge: prefer local per-tab; if tab only exists in cloud, take it.
+    const merged = { ...cloud, ...tabData };
     tabData = merged;
     saveTabsToStorage();
     return true;
@@ -230,13 +265,11 @@ async function loadTabsFromCloud(){
  *******************/
 function requireReauth(){
   try{
-    // Persist namespace & local edits before redirect
     localStorage.setItem('solara_last_uid', currentUserKey || localStorage.getItem('solara_last_uid') || 'anon');
     localStorage.setItem('solara_last_ws',  WORKSPACE_ID   || localStorage.getItem('solara_last_ws')  || 'local');
     computeStorageNS();
     saveTabsToStorage();
   }catch{}
-  // Best-effort cloud flush (keepalive allows in-flight during unload)
   flushCloudNow().finally(()=>{
     try{
       localStorage.removeItem('stytch_session_jwt');
@@ -290,10 +323,7 @@ async function verifySessionAndHydrate(){
   sessionJWT = getSessionJWT();
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
   if(!sessionJWT) return false; // redirect to sign-in
-
-  // Cached UI first
   updateAuthUI();
-
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
     if(!res.ok){ return false; }
@@ -355,23 +385,16 @@ function ensureAtLeastOneTask(){ const cols = tabData[activeTab]; if(!cols) retu
 
 function renderBoard(){
   const columns = ['todo','inprogress','done'];
-  // prepare lanes DnD
   columns.forEach(col => {
     const colEl = document.getElementById(col);
-    // clear existing tasks (keep header + drop-indicator)
     colEl.querySelectorAll('[data-task]')?.forEach(n => n.remove());
 
-    // set DnD
     colEl.ondragover = (e)=>{
       e.preventDefault();
       colEl.classList.add('drag-over','show-drop');
       const after = getDragAfterElement(colEl, e.clientY);
       const indicator = colEl.querySelector('.drop-indicator');
-      if(after == null){
-        colEl.appendChild(indicator);
-      } else {
-        colEl.insertBefore(indicator, after);
-      }
+      if(after == null){ colEl.appendChild(indicator); } else { colEl.insertBefore(indicator, after); }
       dragContext.overCol = colEl.dataset.col;
       dragContext.insertIndex = computeInsertIndex(colEl, indicator);
     };
@@ -403,11 +426,10 @@ function createTaskElement(id, content='', dueDate='', priority='Medium', column
   function togglePlaceholder(){ placeholder.style.display = editable.innerText.trim()==='' ? 'block' : 'none'; }
 
   const row = document.createElement('div'); row.className = 'flex items-center gap-2';
-  const dateInput = document.createElement('input'); dateInput.type = 'date'; dateInput.value = dueDate || ''; dateInput.className = 'mt-1 text-xs bg-transparent text-gray-500 dark:text-gray-300';
+  const dateInput = document.createElement('input'); dateInput.type = 'date'; dateInput.value = normalizeDateString(dueDate) || ''; dateInput.className = 'mt-1 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-transparent rounded px-1 date-badge';
   const prioritySelect = document.createElement('select'); prioritySelect.className = 'mt-1 ml-2 text-xs bg-transparent text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-1'; ['High','Medium','Low'].forEach(level=>{ const opt=document.createElement('option'); opt.value=level; opt.text=level; if(level===priority) opt.selected=true; prioritySelect.appendChild(opt); });
   const deleteBtn = document.createElement('button'); deleteBtn.className = 'absolute top-2 right-2 text-gray-400 hover:text-red-500'; deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'; deleteBtn.title = 'Delete Task'; deleteBtn.onclick = () => { if(confirm('Delete this task?')) removeTaskById(id); };
 
-  // DnD events (precise reorder)
   wrapper.addEventListener('dragstart', e => {
     wrapper.classList.add('dragging');
     e.dataTransfer.setData('text/plain', id);
@@ -418,7 +440,7 @@ function createTaskElement(id, content='', dueDate='', priority='Medium', column
 
   editable.addEventListener('input', ()=>{ togglePlaceholder(); persistTaskEdits(id, { content: editable.innerText.trim() }); });
   editable.addEventListener('blur', ()=> persistTaskEdits(id, { content: editable.innerText.trim() }));
-  dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: dateInput.value || '' }));
+  dateInput.addEventListener('change', ()=> persistTaskEdits(id, { dueDate: normalizeDateString(dateInput.value) }));
   prioritySelect.addEventListener('change', ()=> persistTaskEdits(id, { priority: prioritySelect.value || 'Medium' }));
 
   row.appendChild(dateInput); row.appendChild(prioritySelect);
@@ -469,7 +491,9 @@ function commitReorder(taskId, fromCol, toCol, insertIndex){
 function persistTaskEdits(taskId, patch){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = ['todo','inprogress','done'];
-  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){ Object.assign(list[idx], patch); break; } }
+  for(const col of cols){ const list = tabData[activeTab][col]||[]; const idx = list.findIndex(t=>t.id===taskId); if(idx!==-1){
+      if('dueDate' in patch) patch.dueDate = normalizeDateString(patch.dueDate);
+      Object.assign(list[idx], patch); break; } }
   saveTabsToStorage(); saveTabsToCloud();
 }
 function removeTaskById(taskId){
@@ -497,37 +521,29 @@ function maybeAttachLastWorkspace(){
   if (last){ url.searchParams.set('ws', last); history.replaceState(null,'',url.toString()); }
 }
 
-// Flush on navigation/unload
 window.addEventListener('pagehide', () => { try { saveTabsToStorage(); } catch {} flushCloudNow(); });
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Ensure we have a workspace id or adopt the last one
   maybeAttachLastWorkspace();
   const url = new URL(location.href);
   WORKSPACE_ID = url.searchParams.get('ws') || '';
-  // Compute storage NS early, even if unauth (stabilizes key)
   computeStorageNS();
   if(!WORKSPACE_ID){ document.getElementById('wsBanner').classList.remove('hidden'); }
 
-  // Require session; show placeholder avatar until hydrated
   const ok = await verifySessionAndHydrate();
   if(!ok) return requireReauth();
 
-  // IMPORTANT: migrate any legacy saved tabs into the new per-user/per-ws key
   migrateLegacyIfNeeded();
 
-  // Hydrate local tabs (namespaced by user+workspace)
   tabData = loadTabsFromStorage();
   if(Object.keys(tabData).length===0){ const def='Click to edit'; tabData[def] = { todo:[], inprogress:[], done:[] }; }
   activeTab = Object.keys(tabData)[0];
   renderTabs();
   switchTab(activeTab);
 
-  // Wire header buttons
   wireAuthButtons();
 
-  // Try cloud load (only if workspace id present)
   const loaded = await loadTabsFromCloud();
   if(loaded){ if(!tabData[activeTab]) activeTab = Object.keys(tabData)[0]||activeTab; renderTabs(); switchTab(activeTab); }
 });
