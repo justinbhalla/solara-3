@@ -124,6 +124,7 @@ let sessionJWT = null;
 let authedUser = null; // { name:{first_name,last_name}, email_addresses:[{email_address}] }
 let currentUserKey = null; // user_id or email for namespacing
 let dragContext = { id:null, fromCol:null, overCol:null, insertIndex:null }; // for precise reordering
+let STORAGE_NS = null; // stable localStorage namespace
 
 /*******************
  *  UTILITIES       *
@@ -133,13 +134,21 @@ function getSessionJWT(){
   const m = document.cookie.match(/(?:^|; )(?:stytch_session_jwt|solara_session_jwt)=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : (localStorage.getItem('stytch_session_jwt') || localStorage.getItem('solara_session_jwt') || null);
 }
-function storageKey(){
-  const uid = currentUserKey || 'anon';
-  const wid = WORKSPACE_ID || 'local';
-  return `solara:tabs:${uid}:${wid}`;
+function computeStorageNS() {
+  const uidFromAuth = currentUserKey || (authedUser?.email_addresses?.[0]?.email_address) || null;
+  const widFromUrl  = WORKSPACE_ID || null;
+  const cachedUid = localStorage.getItem('solara_last_uid') || 'anon';
+  const cachedWid = localStorage.getItem('solara_last_ws')  || 'local';
+  const uid = uidFromAuth || cachedUid;
+  const wid = widFromUrl  || cachedWid;
+  STORAGE_NS = `solara:tabs:${uid}:${wid}`;
+  // keep these fresh for the next boot—even if auth drops
+  localStorage.setItem('solara_last_uid', uid);
+  localStorage.setItem('solara_last_ws', wid);
 }
-function loadTabsFromStorage(){ try { const raw = localStorage.getItem(storageKey()); return raw ? JSON.parse(raw) : {}; } catch { return {}; } }
-function saveTabsToStorage(){ try{ localStorage.setItem(storageKey(), JSON.stringify(tabData)); }catch{} }
+function storageKey(){ if(!STORAGE_NS) computeStorageNS(); return STORAGE_NS; }
+function loadTabsFromStorage(){ try { const raw = localStorage.getItem(storageKey()); if(raw) return JSON.parse(raw); const backup = localStorage.getItem('solara_tabs_backup'); return backup ? JSON.parse(backup) : {}; } catch { return {}; } }
+function saveTabsToStorage(){ const key = storageKey(); const json = JSON.stringify(tabData); try{ localStorage.setItem(key, json); localStorage.setItem('solara_tabs_backup', json); }catch(e){ console.warn('Local save failed, writing backup', e); try{ localStorage.setItem('solara_tabs_backup', json); }catch{} } }
 function initialsFor(user){
   const full = ((user?.name?.first_name||'') + ' ' + (user?.name?.last_name||'')).trim();
   const fromName = full.split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('');
@@ -180,19 +189,38 @@ const saveTabsToCloud = debounce(async ()=>{
     const res = await fetch(apiUrl('tasks'), {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` },
-      body: JSON.stringify({ workspace_id: WORKSPACE_ID, tabs: tabData })
+      body: JSON.stringify({ workspace_id: WORKSPACE_ID, tabs: tabData }),
+      keepalive: true,
     });
     if(res.status === 401){ console.warn('Cloud save unauthorized'); return; }
     if(!res.ok) console.warn('Cloud save failed', await res.text());
   }catch(err){ console.warn('Cloud save error', err); }
 }, 450);
+async function flushCloudNow(){
+  if(!sessionJWT || !WORKSPACE_ID) return;
+  try{
+    await fetch(apiUrl('tasks'), {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` },
+      body: JSON.stringify({ workspace_id: WORKSPACE_ID, tabs: tabData }),
+      keepalive: true,
+    });
+  }catch{}
+}
 async function loadTabsFromCloud(){
   if(!sessionJWT || !WORKSPACE_ID) return false;
   try{
     const url = apiUrl('tasks') + `?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`;
     const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
     if(res.status === 401) return false;
-    if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; } }
+    if(!res.ok) return false;
+    const data = await res.json();
+    if(!data || !data.tabs) return false;
+    // Merge: prefer local per-tab if exists; otherwise take cloud
+    const merged = { ...data.tabs, ...tabData };
+    tabData = merged;
+    saveTabsToStorage();
+    return true;
   }catch(err){ console.warn('Cloud load error', err); }
   return false;
 }
@@ -201,8 +229,21 @@ async function loadTabsFromCloud(){
  *  AUTH            *
  *******************/
 function requireReauth(){
-  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); localStorage.removeItem('solara_session_jwt'); }catch{}
-  location.replace('/sign-in.html');
+  try{
+    // Persist namespace & local edits before redirect
+    localStorage.setItem('solara_last_uid', currentUserKey || localStorage.getItem('solara_last_uid') || 'anon');
+    localStorage.setItem('solara_last_ws',  WORKSPACE_ID   || localStorage.getItem('solara_last_ws')  || 'local');
+    computeStorageNS();
+    saveTabsToStorage();
+  }catch{}
+  // Best-effort cloud flush (keepalive allows in-flight during unload)
+  flushCloudNow().finally(()=>{
+    try{
+      localStorage.removeItem('stytch_session_jwt');
+      localStorage.removeItem('solara_session_jwt');
+    }catch{}
+    location.replace('/sign-in.html');
+  });
 }
 function hydrateFromAuthCheckPayload(data){
   const full = (data?.name||'').trim();
@@ -212,6 +253,7 @@ function hydrateFromAuthCheckPayload(data){
   const email = data?.email || '';
   const uid   = data?.user_id || email || 'anon';
   currentUserKey = uid;
+  computeStorageNS();
   return { name:{ first_name:first, last_name:last }, email_addresses: email ? [{ email_address: email }] : [] };
 }
 function updateAuthUI(){
@@ -396,37 +438,29 @@ function getDragAfterElement(container, y){
   }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 function computeInsertIndex(colEl, indicator){
-  // Index among tasks for where the indicator currently sits
   const siblings = [...colEl.querySelectorAll('[data-task]')];
   if (siblings.length === 0) return 0;
-  // indicator is placed before an element or at end; compute index based on next element
   const all = [...colEl.children];
   let index = 0;
   for (let i=0; i<all.length; i++){
     const el = all[i];
     if(el === indicator){
-      // count how many tasks appear before indicator
       index = [...all.slice(0,i)].filter(n => n.hasAttribute && n.hasAttribute('data-task')).length;
       return index;
     }
   }
-  // fallback to end
   return siblings.length;
 }
 function commitReorder(taskId, fromCol, toCol, insertIndex){
   if(!activeTab || !tabData[activeTab]) return;
   const cols = tabData[activeTab];
-  // remove from origin
   let moved; const fromList = cols[fromCol]||[]; const i = fromList.findIndex(t=>t.id===taskId);
   if(i !== -1){ moved = fromList.splice(i,1)[0]; }
   if(!moved) return;
-
-  // insert into target at exact position
   const target = cols[toCol] = cols[toCol]||[];
   if(insertIndex == null || insertIndex < 0) insertIndex = target.length;
   if(insertIndex > target.length) insertIndex = target.length;
   target.splice(insertIndex, 0, moved);
-
   saveTabsToStorage();
   renderBoard();
   saveTabsToCloud();
@@ -463,11 +497,17 @@ function maybeAttachLastWorkspace(){
   if (last){ url.searchParams.set('ws', last); history.replaceState(null,'',url.toString()); }
 }
 
+// Flush on navigation/unload
+window.addEventListener('pagehide', () => { try { saveTabsToStorage(); } catch {} flushCloudNow(); });
+
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Ensure we have a workspace id or adopt the last one
   maybeAttachLastWorkspace();
   const url = new URL(location.href);
   WORKSPACE_ID = url.searchParams.get('ws') || '';
+  // Compute storage NS early, even if unauth (stabilizes key)
+  computeStorageNS();
   if(!WORKSPACE_ID){ document.getElementById('wsBanner').classList.remove('hidden'); }
 
   // Require session; show placeholder avatar until hydrated
