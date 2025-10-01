@@ -9,7 +9,6 @@
   <style>
     .menu-card { box-shadow: 0 10px 20px rgba(0,0,0,.08); }
     .card{box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06)}
-    .sublabel{letter-spacing:.01em}
   </style>
 </head>
 <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
@@ -19,30 +18,31 @@
     No workspace selected. <a class="underline font-medium" href="workspace.html">Go to Workspaces</a>
   </div>
 
-  <!-- Header (duplicated from Solara) -->
+  <!-- Header (EXACT copy of Solara header) -->
   <header class="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
     <div class="flex items-center gap-3">
       <!-- Indigo icon linking back to the Workspace hub -->
-      <a href="workspace.html" class="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center hover:bg-indigo-600/20" title="Back to Workspaces" aria-label="Back to Workspaces">🔷</a>
+      <a href="workspace.html" class="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center hover:bg-indigo-600/20" title="Back to Workspaces">🔷</a>
       <div>
         <h1 class="text-3xl font-bold tracking-tight">Solara</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 sublabel">Part of the ZLG Product Suite</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Part of the ZLG Product Suite</p>
       </div>
     </div>
 
-    <!-- Signed-in user (name → email → initials) -->
+    <!-- Signed-in user -->
     <div id="userArea" class="relative">
-      <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition" aria-haspopup="menu" aria-expanded="false" aria-controls="userMenu">
+      <button id="userButton" class="flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
         <span id="avatar" class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-semibold">?</span>
         <span id="userName" class="text-sm font-medium">User</span>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
       </button>
-      <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl menu-card bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 overflow-hidden" role="menu" aria-label="User menu">
+      <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl menu-card bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div class="px-4 py-3 text-sm">
           <div id="userEmail" class="text-gray-600 dark:text-gray-300"></div>
         </div>
         <div class="border-t border-gray-100 dark:border-gray-700"></div>
-        <button id="signOutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" role="menuitem">Sign out</button>
+        <button id="addUserBtn" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">Add user…</button>
+        <button id="signOutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</button>
       </div>
     </div>
   </header>
@@ -55,7 +55,7 @@
         <span>Tasks</span>
       </button>
       <button class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-4m4 4V8m4 8V5"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 16v-4m4 4V8m4 8V5"/></svg>
         <span>Reports</span>
       </button>
     </div>
@@ -64,9 +64,8 @@
       <button
         onclick="clearReports()"
         title="Clear extra blocks"
-        aria-label="Clear extra blocks"
         class="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m0 0A2.99 2.99 0 017 6h10a2.99 2.99 0 012.418 3H19v10a2 2 0 01-2 2H7a2 2 0 01-2-2V9h.582zM10 11v6m4-6v6"/>
         </svg>
       </button>
@@ -75,8 +74,7 @@
         onclick="addReportBlock()"
         id="addReportBtn"
         class="px-4 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-500 shadow transition"
-        title="Add report block"
-        aria-label="Add report block">+</button>
+        title="Add report block">+</button>
     </div>
   </nav>
 
@@ -87,7 +85,7 @@
       <div class="bg-white dark:bg-gray-800 p-6 rounded-xl card">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-lg font-semibold">Completion Rate</h3>
-          <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M3 12l2 2 4-4m2 10h6a2 2 0 0 0 2-2v-5" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M17 8h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -100,9 +98,6 @@
       <div class="bg-white dark:bg-gray-800 p-6 rounded-xl card">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-lg font-semibold">Task Status</h3>
-          <svg class="h-6 w-6 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 3v18h18M7 16v-4m4 4V8m4 8V5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Breakdown by current state (all tabs).</p>
         <ul class="space-y-2 text-sm font-medium">
@@ -119,8 +114,8 @@
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3">
       <span class="text-sm text-gray-500 dark:text-gray-400"></span>
-      <button onclick="exportReportsAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition" title="Download Report PDF" aria-label="Download Report PDF">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16l4-5h-3V4h-2v7H8l4 5zm-7 4h14v-2H5v2z"/></svg>
+      <button onclick="exportReportsAsPDF()" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition" title="Download Report PDF">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 16l4-5h-3V4h-2v7H8l4 5zm-7 4h14v-2H5v2z"/></svg>
       </button>
     </div>
     <footer class="text-center text-xs text-gray-500 dark:text-gray-400 px-6 py-3 border-t border-gray-200 dark:border-gray-700">© 2025 ZenLock Group (ZLG). All rights reserved.</footer>
@@ -130,7 +125,7 @@
 /*************************
  *  CONFIG               *
  *************************/
-const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev"; // same Worker as Solara
+const API_BASE = "https://crimson-hill-6a85.justinbhalla28.workers.dev";
 const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace(/^\/+/, '');
 
 /**************
@@ -139,8 +134,8 @@ const apiUrl = (p) => API_BASE.replace(/\/+$/, '') + '/' + String(p||'').replace
 let WORKSPACE_ID = '';
 let sessionJWT = null;
 let authedUser = null;
-let currentUserKey = null; // user_id or email for namespacing
-let tabData = {}; // hydrated from storage + cloud
+let currentUserKey = null;
+let tabData = {};
 
 /*******************
  *  UTILITIES       *
@@ -175,7 +170,9 @@ function displayNameFor(user){
  *  AUTH            *
  *******************/
 function requireReauth(){
-  try{ localStorage.removeItem('stytch_session_jwt'); localStorage.removeItem('stytch_user'); localStorage.removeItem('solara_session_jwt'); }catch{}
+  try{
+    localStorage.setItem('solara_last_ws', WORKSPACE_ID || localStorage.getItem('solara_last_ws') || 'local');
+  }catch{}
   location.replace('/sign-in.html');
 }
 function hydrateFromAuthCheckPayload(data){
@@ -198,18 +195,25 @@ function updateAuthUI(){
   emailEl.textContent = u?.email_addresses?.[0]?.email_address || '';
 }
 function wireAuthButtons(){
-  const btn = document.getElementById('userButton');
-  btn.onclick = () => {
-    const menu = document.getElementById('userMenu');
-    const expanded = menu.classList.contains('hidden') ? 'true' : 'false';
-    btn.setAttribute('aria-expanded', expanded);
-    menu.classList.toggle('hidden');
-  };
+  document.getElementById('userButton').onclick = () => document.getElementById('userMenu').classList.toggle('hidden');
   document.addEventListener('click', (e)=>{
     const m = document.getElementById('userMenu');
     const b = document.getElementById('userButton');
     if(!m.classList.contains('hidden') && !m.contains(e.target) && !b.contains(e.target)) m.classList.add('hidden');
   });
+  document.getElementById('addUserBtn').onclick = async () => {
+    const email = prompt('Invite a user by email:');
+    if(!email) return;
+    if(!sessionJWT) return requireReauth();
+    try{
+      const res = await fetch(apiUrl('shares'), {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessionJWT}` },
+        body: JSON.stringify({ email, workspace_id: WORKSPACE_ID||null })
+      });
+      if(res.ok) alert('Invitation sent.'); else alert('Invite failed: ' + (await res.text()));
+    }catch(err){ alert('Invite error: ' + err.message); }
+  };
   document.getElementById('signOutBtn').onclick = async () => {
     try{ if(sessionJWT){ await fetch(apiUrl('logout'), { method:'POST', headers:{ 'Authorization':`Bearer ${sessionJWT}` } }).catch(()=>{}); } }
     finally{ requireReauth(); }
@@ -220,7 +224,7 @@ async function verifySessionAndHydrate(){
   authedUser = JSON.parse(localStorage.getItem('stytch_user') || 'null');
   if(!sessionJWT) return false;
 
-  updateAuthUI(); // optimistic
+  updateAuthUI();
 
   try{
     const res = await fetch(apiUrl('auth/check'), { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
@@ -251,7 +255,7 @@ async function loadTabsFromCloud(){
     const res = await fetch(url, { headers:{ 'Authorization':`Bearer ${sessionJWT}` } });
     if(res.status === 401) return false;
     if(res.ok){ const data = await res.json(); if(data && data.tabs){ tabData = data.tabs; saveTabsToStorage(); return true; } }
-  }catch(err){ /* ignore for reports */ }
+  }catch(err){}
   return false;
 }
 
@@ -289,12 +293,13 @@ function computeMetrics(){
 }
 function paintCards(){
   const m = computeMetrics();
-  document.getElementById('todoCount').textContent = m.todo;
-  document.getElementById('inprogressCount').textContent = m.inprogress;
-  document.getElementById('doneCount').textContent = m.done;
-  document.getElementById('totalCount').textContent = m.total;
-  document.getElementById('completionRate').textContent = m.completionRate + '%';
-  // Update extended blocks
+  const el = (id) => document.getElementById(id);
+  el('todoCount').textContent = m.todo;
+  el('inprogressCount').textContent = m.inprogress;
+  el('doneCount').textContent = m.done;
+  el('totalCount').textContent = m.total;
+  el('completionRate').textContent = m.completionRate + '%';
+
   document.querySelectorAll('#report-area .card').forEach(card => {
     const title = card.querySelector('h3')?.textContent?.trim();
     if(title==='Overdue Tasks'){
@@ -330,7 +335,6 @@ function addReportBlock(){
 }
 function clearReports(){
   const area = document.getElementById('report-area');
-  // Keep the two default cards at the top
   while(area.children.length>2){ area.removeChild(area.lastElementChild); }
 }
 
@@ -363,22 +367,18 @@ function maybeAttachLastWorkspace(){
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  // Adopt last workspace if needed (duplicate Solara behavior)
   maybeAttachLastWorkspace();
   const url = new URL(location.href);
   WORKSPACE_ID = url.searchParams.get('ws') || '';
   if(!WORKSPACE_ID){ document.getElementById('wsBanner').classList.remove('hidden'); }
 
-  // Auth required
   const ok = await verifySessionAndHydrate();
   if(!ok) return requireReauth();
   wireAuthButtons();
 
-  // Load local first (namespaced by user+workspace) to avoid cross-user leakage
   tabData = loadTabsFromStorage();
-  paintCards(); // optimistic UI
+  paintCards();
 
-  // Cloud pull (optional, overrides local if present)
   const loaded = await loadTabsFromCloud();
   if(loaded){ try{ localStorage.setItem('solara_last_sync', Date.now()); }catch{} paintCards(); }
 });
