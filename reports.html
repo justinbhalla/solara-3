@@ -47,7 +47,7 @@
     </div>
   </header>
 
-  <!-- Nav: left = section tabs, right = actions (buttons duplicated from Solara) -->
+  <!-- Nav: left = section tabs, right = actions (exact duplicates of Solara controls) -->
   <nav class="flex items-center justify-between px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium">
     <div class="flex items-center gap-6">
       <button onclick="goTasks()" class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-indigo-600">
@@ -60,22 +60,24 @@
       </button>
     </div>
     <div class="flex items-center gap-3">
-      <!-- Clear extras (duplicate Solara trash button styles) -->
+      <!-- Clear extras (trash) — EXACT same icon + classes as Solara -->
       <button
         onclick="clearReports()"
         title="Clear extra blocks"
         aria-label="Clear extra blocks"
         class="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <!-- Solara trash path (from your Tasks nav) -->
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M10 11v6m4-6v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2L18 7M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
         </svg>
       </button>
-      <!-- Add report block (duplicate Solara “Add Tab” pill: rounded-full green icon) -->
+
+      <!-- Add report block — SQUARE, indigo, matches Solara tone (icon-only) -->
       <button
         onclick="addReportBlock()"
         title="Add report block"
         aria-label="Add report block"
-        class="p-2 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition duration-150 shadow-sm border border-green-200">
+        class="w-9 h-9 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 shadow transition flex items-center justify-center">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
@@ -118,7 +120,7 @@
     </div>
   </main>
 
-  <!-- Bottom rail (export right) – duplicated export button style -->
+  <!-- Bottom rail (export right) – same as Solara) -->
   <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
     <div class="flex items-center justify-between px-6 py-3">
       <span class="text-sm text-gray-500 dark:text-gray-400"></span>
